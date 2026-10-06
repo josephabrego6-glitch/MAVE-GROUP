@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAVE — Panel de Gestión</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --cream: #F8EEDD;
+    --cream-deep: #F1E3CB;
+    --wine: #4A1229;
+    --wine-soft: #6E2440;
+    --wine-line: #C9A98C;
+    --gold: #B8925A;
+    --ink: #2B1A20;
+    --ink-soft: #7A5F62;
+    --white: #FFFDF9;
+    --danger: #A23B2E;
+    --good: #4C6B4F;
+    --radius: 3px;
+    --shadow: 0 2px 14px rgba(74,18,41,0.08);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Work Sans', sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,h2,h3,.serif{ font-family: 'Cormorant Garamond', serif; }
+  ::selection{ background: var(--wine-line); color: var(--wine); }
+
+  /* ---------- Login ---------- */
+  #loginScreen{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding: 24px;
+  }
+  .login-card{
+    width: 100%; max-width: 380px;
+    background: var(--white);
+    border: 1px solid var(--wine-line);
+    padding: 48px 36px 40px;
+    text-align:center;
+  }
+  .login-word{
+    font-family:'Cormorant Garamond', serif;
+    font-size: 52px; font-weight:600; color: var(--wine);
+    letter-spacing: 1px; margin: 0;
+  }
+  .login-sub{ color: var(--ink-soft); font-size: 14px; margin: 4px 0 32px; }
+  .field{ text-align:left; margin-bottom: 16px; }
+  .field label{ display:block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 6px; }
+  .field input, .field select, .field textarea{
+    width:100%; padding: 11px 12px; border: 1px solid #DCC9AF;
+    background: var(--white); border-radius: var(--radius);
+    font-family: 'Work Sans', sans-serif; font-size: 14.5px; color: var(--ink);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{
+    outline: none; border-color: var(--wine-soft);
+  }
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding: 12px 20px; border:none; cursor:pointer;
+    font-family:'Work Sans',sans-serif; font-size: 14px; font-weight: 600;
+    border-radius: var(--radius); transition: background .15s ease, opacity .15s ease;
+  }
+  .btn-primary{ background: var(--wine); color: var(--white); width: 100%; }
+  .btn-primary:hover{ background: var(--wine-soft); }
+  .btn-ghost{ background: transparent; color: var(--wine); border: 1px solid var(--wine-line); }
+  .btn-ghost:hover{ background: var(--cream-deep); }
+  .btn-text{ background:none; border:none; color: var(--ink-soft); font-size: 13px; cursor:pointer; text-decoration: underline; padding:4px; }
+  .login-error{ color: var(--danger); font-size: 13px; margin: 0 0 14px; display:none; }
+  .login-hint{ margin-top: 22px; font-size: 11.5px; color: var(--ink-soft); opacity:.7; }
+
+  /* ---------- App shell ---------- */
+  #app{ display:none; min-height: 100vh; }
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 28px; background: var(--white); border-bottom: 1px solid var(--wine-line);
+    position: sticky; top:0; z-index: 20;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .word{ font-family:'Cormorant Garamond',serif; font-size: 26px; font-weight:600; color: var(--wine); letter-spacing: 0.5px; }
+  .brand .tag{ font-size: 11px; color: var(--ink-soft); border-left: 1px solid var(--wine-line); padding-left:10px; }
+  .top-actions{ display:flex; align-items:center; gap:10px; }
+  .icon-btn{
+    background:none; border:1px solid var(--wine-line); color:var(--wine);
+    width:36px; height:36px; border-radius: 50%; cursor:pointer; font-size:15px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .icon-btn:hover{ background: var(--cream-deep); }
+
+  .layout{ display:flex; }
+  nav.sidenav{
+    width: 200px; flex-shrink:0; background: var(--white); border-right:1px solid var(--wine-line);
+    min-height: calc(100vh - 69px); padding: 18px 0;
+  }
+  nav.sidenav button{
+    display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+    background:none; border:none; padding: 13px 24px; font-size:14.5px; color: var(--ink-soft);
+    cursor:pointer; font-family:'Work Sans',sans-serif; border-left: 3px solid transparent;
+  }
+  nav.sidenav button:hover{ background: var(--cream-deep); color: var(--wine); }
+  nav.sidenav button.active{ color: var(--wine); border-left-color: var(--wine); background: var(--cream-deep); font-weight:600; }
+
+  main.content{ flex:1; padding: 28px 32px 60px; max-width: 1200px; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+  .view-header{ margin-bottom: 22px; }
+  .view-header h1{ font-size: 30px; font-weight:600; color: var(--wine); margin: 0 0 4px; }
+  .view-header p{ color: var(--ink-soft); font-size: 14px; margin:0; }
+
+  /* ---------- Cards ---------- */
+  .cards-row{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 30px; }
+  .stat-card{ background: var(--white); border:1px solid var(--wine-line); padding: 20px; }
+  .stat-card .label{ font-size: 12.5px; color: var(--ink-soft); margin-bottom: 8px; }
+  .stat-card .value{ font-family:'Cormorant Garamond',serif; font-size: 30px; font-weight:600; color: var(--wine); }
+  .stat-card.neg .value{ color: var(--danger); }
+
+  .panel{ background: var(--white); border:1px solid var(--wine-line); padding: 24px; margin-bottom: 24px; }
+  .panel h2{ font-size: 19px; font-weight:600; color: var(--wine); margin: 0 0 18px; }
+  .form-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px 16px; }
+  .form-grid .span2{ grid-column: span 2; }
+  .form-grid .span3{ grid-column: span 3; }
+  .form-actions{ margin-top: 18px; display:flex; gap:10px; }
+
+  .calc-line{ font-size: 13px; color: var(--ink-soft); background: var(--cream); padding:12px 14px; border-radius: var(--radius); margin-top: 4px;}
+  .calc-line b{ color: var(--wine); }
+  .calc-line.total{ background: var(--cream-deep); font-size: 14px; }
+
+  .checkbox-row{ display:flex; align-items:center; gap:10px; padding: 11px 0 0; }
+  .checkbox-row input[type="checkbox"]{ width:17px; height:17px; accent-color: var(--wine); cursor:pointer; }
+  .checkbox-row label{ font-size: 13.5px; color: var(--ink); cursor:pointer; }
+  .hidden-field{ display:none !important; }
+  .pedido-badge{ display:inline-block; background: var(--wine); color: var(--white); font-family:'Cormorant Garamond',serif; font-size: 15px; font-weight:600; padding: 4px 12px; border-radius: 3px; margin-bottom: 18px; }
+  .delivery-tag{ font-size: 11.5px; background: var(--cream-deep); color: var(--wine); padding: 3px 8px; border-radius: 20px; }
+  .delivery-tag.no{ background: transparent; color: var(--ink-soft); }
+
+  table{ width:100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th{
+    text-align:left; padding: 10px 12px; color: var(--ink-soft); font-weight:600;
+    font-size: 12px; border-bottom: 1px solid var(--wine-line);
+  }
+  tbody td{ padding: 12px; border-bottom: 1px solid #EEE0C9; vertical-align: middle; }
+  tbody tr:last-child td{ border-bottom:none; }
+  .prod-thumb{ width:42px; height:42px; object-fit:cover; border-radius: var(--radius); background: var(--cream-deep); }
+  .prod-thumb.placeholder{ display:flex; align-items:center; justify-content:center; color: var(--wine-line); font-size:18px; }
+  .pos{ color: var(--good); font-weight:600; }
+  .neg{ color: var(--danger); font-weight:600; }
+  .row-actions{ display:flex; gap:8px; }
+  .link-btn{ background:none; border:none; cursor:pointer; color: var(--ink-soft); font-size:13px; padding:2px 4px; }
+  .link-btn:hover{ color: var(--wine); }
+  .link-btn.danger:hover{ color: var(--danger); }
+  .empty-state{ text-align:center; padding: 40px 20px; color: var(--ink-soft); font-size: 14px; }
+
+  .photo-upload{ display:flex; align-items:center; gap:14px; }
+  .photo-preview{
+    width: 64px; height: 64px; border-radius: var(--radius); background: var(--cream-deep);
+    border: 1px dashed var(--wine-line); display:flex; align-items:center; justify-content:center;
+    overflow:hidden; color: var(--wine-line); font-size: 22px; flex-shrink:0;
+  }
+  .photo-preview img{ width:100%; height:100%; object-fit:cover; }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background: rgba(43,26,32,0.45);
+    align-items:center; justify-content:center; z-index: 100; padding: 20px;
+  }
+  .modal-overlay.active{ display:flex; }
+  .modal{ background: var(--white); width:100%; max-width: 380px; padding: 28px; border-radius: var(--radius); }
+  .modal h3{ margin: 0 0 18px; color: var(--wine); font-size: 20px; font-weight:600; }
+  .modal-actions{ display:flex; gap:10px; margin-top: 18px; }
+  .toast{
+    position: fixed; bottom: 24px; right: 24px; background: var(--wine); color: var(--white);
+    padding: 13px 20px; border-radius: var(--radius); font-size: 13.5px; z-index: 200;
+    opacity:0; transform: translateY(8px); transition: all .25s ease; pointer-events:none;
+  }
+  .toast.show{ opacity:1; transform: translateY(0); }
+
+  @media (max-width: 860px){
+    .layout{ flex-direction:column; }
+    nav.sidenav{ width:100%; min-height:auto; display:flex; overflow-x:auto; padding: 6px 8px; border-right:none; border-bottom:1px solid var(--wine-line); }
+    nav.sidenav button{ padding: 10px 16px; white-space:nowrap; border-left:none; border-bottom:3px solid transparent; }
+    nav.sidenav button.active{ border-left:none; border-bottom-color: var(--wine); }
+    main.content{ padding: 20px 16px 50px; }
+    .cards-row{ grid-template-columns: repeat(2,1fr); }
+    .form-grid{ grid-template-columns: 1fr 1fr; }
+    .form-grid .span2, .form-grid .span3{ grid-column: span 2; }
+    table{ font-size: 12.5px; }
+    thead{ display:none; }
+    tbody tr{ display:block; border-bottom: 8px solid var(--cream); }
+    tbody td{ display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom: 1px solid #EEE0C9; }
+    tbody td::before{ content: attr(data-label); color: var(--ink-soft); font-size:11.5px; }
+    .topbar{ padding: 14px 16px; }
+    .brand .tag{ display:none; }
+  }
+  @media (max-width: 480px){
+    .cards-row{ grid-template-columns: 1fr 1fr; }
+    .login-card{ padding: 36px 22px 30px; }
+  }
+/* modo solo lectura por módulo */
+.ro-inventario #view-inventario .panel:has(form),.ro-inventario #view-inventario .link-btn,
+.ro-pedidos #view-pedidos .panel:has(form),.ro-pedidos #view-pedidos .link-btn,
+.ro-ventas #view-ventas .panel:has(form),.ro-ventas #view-ventas .link-btn,
+.ro-importaciones #view-importaciones .panel:has(form),.ro-importaciones #view-importaciones .link-btn,
+.ro-insumos #view-insumos .panel:has(form),.ro-insumos #view-insumos .link-btn{display:none !important}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen">
+  <div class="login-card">
+    <p class="login-word">MAVE</p>
+    <p class="login-sub">women's bags — panel privado</p>
+    <p class="login-error" id="loginError">Correo o contraseña incorrectos.</p>
+    <form id="loginForm">
+      <div class="field">
+        <label for="loginEmail">Correo</label>
+        <input type="email" id="loginEmail" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="loginPass">Contraseña</label>
+        <input type="password" id="loginPass" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary">Ingresar</button>
+    </form>
+    <p class="login-hint">Acceso exclusivo para el equipo de MAVE. Si no tienes cuenta, pídele a la administración que te dé de alta.</p>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="mfaBox" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;">
+  <div id="mfaCard" style="background:#fff;color:#222;padding:26px;border-radius:12px;max-width:400px;width:92%;max-height:92vh;overflow:auto;"></div>
+</div>
+<div id="app">
+  <div class="topbar">
+    <div class="brand">
+      <span class="word">MAVE</span>
+      <span class="tag">gestión de inventario &amp; ventas</span>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" id="btnChangePass" title="Cambiar contraseña">&#9998;</button>
+      <button class="icon-btn" id="btnLogout" title="Cerrar sesión">&#8594;</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <nav class="sidenav">
+      <button data-view="dashboard" class="active">Panel general</button>
+      <button data-view="inventario">Inventario</button>
+      <button data-view="pedidos">Pedidos</button>
+      <button data-view="ventas">Ventas</button>
+      <button data-view="importaciones">Importaciones</button>
+      <button data-view="seguridad">Seguridad <span id="secBadge"></span></button>
+      <button data-view="insumos">Insumos y gastos</button>
+    </nav>
+
+    <main class="content">
+      <div id="authzBar" style="display:none;margin:0 0 14px;padding:10px 14px;border:1px solid #c9a96e;border-radius:8px;font-size:14px;"></div>
+
+      <!-- ---------- DASHBOARD ---------- -->
+      <section class="view active" id="view-dashboard">
+        <div class="view-header">
+          <h1>Panel general</h1>
+          <p>Resumen financiero en tiempo real de MAVE.</p>
+        </div>
+        <div class="cards-row">
+          <div class="stat-card"><div class="label">Ingresos totales</div><div class="value" id="statIngresos">$0.00</div></div>
+          <div class="stat-card"><div class="label">Costos totales</div><div class="value" id="statCostos">$0.00</div></div>
+          <div class="stat-card" id="cardGanancia"><div class="label">Ganancia neta real</div><div class="value" id="statGanancia">$0.00</div></div>
+          <div class="stat-card"><div class="label">Stock total</div><div class="value" id="statStock">0</div></div>
+        </div>
+
+        <div class="panel">
+          <h2>Últimas ventas</h2>
+          <div style="overflow-x:auto;">
+          <table id="tblRecentSales">
+            <thead><tr><th>Fecha</th><th>Producto</th><th>Cliente</th><th>Cant.</th><th>Total</th><th>Ganancia</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          </div>
+          <div class="empty-state" id="emptyRecentSales" style="display:none;">Todavía no hay ventas registradas.</div>
+        </div>
+      </section>
+
+      <!-- ---------- INVENTARIO ---------- -->
+      <section class="view" id="view-inventario">
+        <div class="view-header">
+          <h1>Inventario</h1>
+          <p>Registra la mercancía y calcula el costo unitario en dólares automáticamente.</p>
+        </div>
+
+        <div class="panel">
+          <h2 id="prodFormTitle">Nueva cartera</h2>
+          <form id="productForm">
+            <input type="hidden" id="prodId">
+            <div class="form-grid">
+              <div class="field span3">
+                <label>Foto del producto</label>
+                <div class="photo-upload">
+                  <div class="photo-preview" id="photoPreview">&#128247;</div>
+                  <input type="file" id="prodPhoto" accept="image/*">
+                </div>
+              </div>
+              <div class="field span2">
+                <label for="prodName">Nombre de la cartera</label>
+                <input type="text" id="prodName" required placeholder="Ej. Cartera Sofía mini">
+              </div>
+              <div class="field">
+                <label for="prodStock">Stock disponible</label>
+                <input type="number" id="prodStock" min="0" step="1" required placeholder="0">
+              </div>
+              <div class="field span3">
+                <label for="prodDesc">Descripción</label>
+                <textarea id="prodDesc" rows="2" placeholder="Piel sintética, correa ajustable, color camel..."></textarea>
+              </div>
+              <div class="field">
+                <label for="prodMXN">Precio de compra (MXN)</label>
+                <input type="number" id="prodMXN" min="0" step="0.01" required placeholder="0.00">
+              </div>
+              <div class="field">
+                <label for="prodTasa">Tasa de cambio MXN/USD</label>
+                <input type="number" id="prodTasa" min="0.01" step="0.01" value="18.00" required>
+              </div>
+              <div class="field">
+                <label for="prodExport">Costo de exportación (USD)</label>
+                <input type="number" id="prodExport" min="0" step="0.01" value="5.00" required>
+              </div>
+              <div class="field span3">
+                <div class="calc-line">Costo unitario en USD: <b id="calcCostoUSD">$0.00</b> &nbsp;·&nbsp; fórmula: (Precio MXN × 1.05 ÷ Tasa) + Costo de exportación</div>
+              </div>
+              <div class="field">
+                <label for="prodVenta">Precio de venta al público (USD)</label>
+                <input type="number" id="prodVenta" min="0" step="0.01" required placeholder="0.00">
+              </div>
+              <div class="field span2">
+                <div class="calc-line" style="margin-top:26px;">Margen estimado por unidad: <b id="calcMargen">$0.00</b></div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" style="width:auto;" id="prodSubmitBtn">Guardar producto</button>
+              <button type="button" class="btn btn-ghost" id="prodCancelEdit" style="display:none;">Cancelar edición</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>Tabla de inventario</h2>
+          <div style="overflow-x:auto;">
+          <table id="tblInventario">
+            <thead><tr><th>Foto</th><th>Producto</th><th>Costo MXN</th><th>Costo total USD</th><th>Precio venta USD</th><th>Margen</th><th>Stock</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          </div>
+          <div class="empty-state" id="emptyInventario" style="display:none;">Aún no hay carteras registradas. Agrega la primera arriba.</div>
+        </div>
+      </section>
+
+      <!-- ---------- PEDIDOS ---------- -->
+      <section class="view" id="view-pedidos">
+        <div class="view-header">
+          <h1>Pedidos</h1>
+          <p>Registra cada compra a tu proveedor en México y súmala automáticamente al inventario.</p>
+        </div>
+
+        <div class="panel">
+          <span class="pedido-badge" id="pedidoNumberBadge">Pedido #1</span>
+          <form id="pedidoForm">
+            <div class="form-grid">
+              <div class="field span2">
+                <label for="pedidoProduct">Producto</label>
+                <select id="pedidoProduct" required>
+                  <option value="__new__">+ Producto nuevo</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="pedidoDate">Fecha</label>
+                <input type="date" id="pedidoDate" required>
+              </div>
+              <div class="field span3" id="pedidoNewNameWrap">
+                <label for="pedidoNewName">Nombre del producto nuevo</label>
+                <input type="text" id="pedidoNewName" placeholder="Ej. Cartera Sofía mini">
+              </div>
+              <div class="field">
+                <label for="pedidoQty">Cantidad recibida</label>
+                <input type="number" id="pedidoQty" min="1" step="1" required placeholder="Ej. 10">
+              </div>
+              <div class="field">
+                <label for="pedidoMXN">Precio de compra por unidad (MXN)</label>
+                <input type="number" id="pedidoMXN" min="0" step="0.01" required placeholder="0.00">
+              </div>
+              <div class="field">
+                <label for="pedidoTasa">Tasa de cambio MXN/USD</label>
+                <input type="number" id="pedidoTasa" min="0.01" step="0.01" value="18.00" required>
+              </div>
+              <div class="field">
+                <label for="pedidoExport">Costo de envío/exportación por unidad (USD)</label>
+                <input type="number" id="pedidoExport" min="0" step="0.01" value="5.00" required>
+              </div>
+              <div class="field">
+                <label for="pedidoVenta">Precio de venta al público (USD)</label>
+                <input type="number" id="pedidoVenta" min="0" step="0.01" required placeholder="0.00">
+              </div>
+              <div class="field span2">
+                <div class="calc-line">Costo unitario en USD: <b id="pedidoCalcUnit">$0.00</b></div>
+              </div>
+              <div class="field span3">
+                <div class="checkbox-row">
+                  <input type="checkbox" id="pedidoDelivery">
+                  <label for="pedidoDelivery">El cliente solicitó delivery a domicilio para este pedido</label>
+                </div>
+              </div>
+              <div class="field hidden-field" id="pedidoDeliveryCostWrap">
+                <label for="pedidoDeliveryCost">Costo de delivery (USD)</label>
+                <input type="number" id="pedidoDeliveryCost" min="0" step="0.01" placeholder="0.00">
+              </div>
+              <div class="field span3">
+                <div class="calc-line total">Costo total del pedido: <b id="pedidoCalcTotal">$0.00</b></div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" style="width:auto;">Registrar pedido</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>Historial de pedidos</h2>
+          <div style="overflow-x:auto;">
+          <table id="tblPedidos">
+            <thead><tr><th>#</th><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Costo unit. USD</th><th>Costo total</th><th>Delivery</th><th>Venta USD</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          </div>
+          <div class="empty-state" id="emptyPedidos" style="display:none;">Aún no hay pedidos registrados.</div>
+        </div>
+      </section>
+
+      <!-- ---------- VENTAS ---------- -->
+      <section class="view" id="view-ventas">
+        <div class="view-header">
+          <h1>Ventas</h1>
+          <p>Registra una venta y descuenta el stock automáticamente.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Nueva venta</h2>
+          <form id="saleForm">
+            <div class="form-grid">
+              <div class="field span2">
+                <label for="saleProduct">Producto</label>
+                <select id="saleProduct" required></select>
+              </div>
+              <div class="field">
+                <label for="saleQty">Cantidad</label>
+                <input type="number" id="saleQty" min="1" step="1" value="1" required>
+              </div>
+              <div class="field">
+                <label for="saleClient">Cliente</label>
+                <input type="text" id="saleClient" required placeholder="Nombre del cliente">
+              </div>
+              <div class="field">
+                <label for="saleDate">Fecha</label>
+                <input type="date" id="saleDate" required>
+              </div>
+              <div class="field">
+                <label for="salePhone">Teléfono de contacto</label>
+                <input type="tel" id="salePhone" placeholder="+507 6000-0000">
+              </div>
+              <div class="field">
+                <label for="saleAdvisor">Asesor (quien atendió)</label>
+                <input type="text" id="saleAdvisor" placeholder="Nombre del asesor">
+              </div>
+              <div class="field">
+                <label for="salePayType">Forma de pago</label>
+                <select id="salePayType">
+                  <option value="total">Pago total</option>
+                  <option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>
+                </select>
+              </div>
+              <div class="field" id="saleAbonoField" style="display:none;">
+                <label for="saleAbono">Abono inicial (USD)</label>
+                <input type="number" id="saleAbono" min="0" step="0.01" placeholder="0.00">
+              </div>
+              <div class="field span2">
+                <div class="calc-line" style="margin-top:26px;">Total a cobrar: <b id="calcSaleTotal">$0.00</b></div>
+                <div class="calc-line" id="calcSalePlan" style="display:none;"></div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" style="width:auto;">Registrar venta</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>Historial de ventas</h2>
+          <div style="overflow-x:auto;">
+          <table id="tblVentas">
+            <thead><tr><th>Fecha</th><th>Producto</th><th>Cliente</th><th>Cant.</th><th>Total USD</th><th>Ganancia USD</th><th>Pago</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          </div>
+          <div class="empty-state" id="emptyVentas" style="display:none;">Aún no hay ventas registradas.</div>
+        </div>
+      </section>
+
+      <!-- ---------- INSUMOS ---------- -->
+      <section class="view" id="view-importaciones">
+        <div class="view-header">
+          <h1>Importaciones</h1>
+          <p>Registra cada compra a tus proveedores, con los productos que sean, en cualquier moneda.</p>
+        </div>
+        <div class="panel">
+          <h2>Nueva importación</h2>
+          <form id="impForm">
+            <div class="form-grid">
+              <div class="field"><label for="impDate">Fecha</label><input type="date" id="impDate" required></div>
+              <div class="field"><label for="impSupplier">Proveedor</label><input type="text" id="impSupplier" placeholder="Nombre del proveedor"></div>
+              <div class="field"><label for="impCountry">País de origen</label><input type="text" id="impCountry" placeholder="México"></div>
+              <div class="field"><label for="impPay">Método de pago</label>
+                <select id="impPay"><option value="contado">Contado</option><option value="ach">ACH</option><option value="paypal">PayPal</option><option value="tarjeta">Tarjeta</option></select></div>
+              <div class="field span2"><label for="impCurrency">Moneda de la compra (busca por nombre, código o país)</label>
+                <input type="text" id="impCurrency" list="currencyList" placeholder="Ej: MXN, bolívar, China" autocomplete="off" required></div>
+              <div class="field"><label for="impRate">Tasa (unidades por 1 USD)</label><input type="number" id="impRate" min="0" step="any" required></div>
+              <div class="field"><label for="impTaxPct">Impuesto del país (%)</label><input type="number" id="impTaxPct" min="0" max="99.99" step="any" value="0"></div>
+              <div class="field"><label for="impTaxIncl">Los precios…</label>
+                <select id="impTaxIncl"><option value="0">NO incluyen el impuesto (se suma)</option><option value="1">YA incluyen el impuesto</option></select></div>
+              <div class="field"><label for="impComm">Cargo del proveedor (% del precio)</label><input type="number" id="impComm" min="0" step="any" value="0"></div>
+              <div class="field"><label for="impAlloc">Repartir bodega y otros costos</label>
+                <select id="impAlloc"><option value="valor">Según el valor del producto</option><option value="unidad">Igual por unidad</option></select></div>
+            </div>
+            <datalist id="currencyList"></datalist>
+            <h3 style="margin:18px 0 6px;">Productos</h3>
+            <div style="overflow-x:auto;"><table id="impItemsTbl">
+              <thead><tr><th>Producto</th><th>Nombre (si es nuevo)</th><th>Cant.</th><th>Precio unit.</th><th>Venta USD</th><th></th></tr></thead><tbody></tbody></table></div>
+            <button type="button" class="link-btn" id="impAddItem">+ Agregar producto</button>
+            <h3 style="margin:18px 0 6px;">Costos adicionales (bodega, cargo fijo del proveedor, envío…)</h3>
+            <div style="overflow-x:auto;"><table id="impCostsTbl">
+              <thead><tr><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Moneda</th><th>Tasa por 1 USD</th><th></th></tr></thead><tbody></tbody></table></div>
+            <button type="button" class="link-btn" id="impAddCost">+ Agregar costo</button>
+            <div class="calc-line" id="impPreview" style="margin-top:14px;"></div>
+            <div class="form-actions">
+              <button type="button" class="btn" id="impSaveDraft" style="width:auto;">Guardar borrador</button>
+              <button type="submit" class="btn btn-primary" style="width:auto;">Guardar y recibir en inventario</button>
+            </div>
+          </form>
+        </div>
+        <div class="panel">
+          <h2>Historial de importaciones</h2>
+          <div style="overflow-x:auto;"><table id="tblImp">
+            <thead><tr><th>#</th><th>Fecha</th><th>Proveedor</th><th>Moneda</th><th>Pago</th><th>Prod.</th><th>Total USD</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table></div>
+          <p class="empty" id="emptyImp">Aún no hay importaciones registradas.</p>
+        </div>
+      </section>
+
+      <section class="view" id="view-seguridad">
+        <div class="view-header">
+          <h1>Seguridad</h1>
+          <p>Alertas, autorizaciones, usuarios y accesos. Solo visible para el administrador.</p>
+        </div>
+        <div class="panel"><h2>Verificación en dos pasos</h2>
+          <p>Activada en tu cuenta ✓ — se pide un código de tu app autenticadora al iniciar sesión, y la base de datos rechaza las sesiones que no la completaron.</p>
+          <p class="empty" style="display:block;">Es obligatoria para administrador y supervisor. Si alguien pierde su teléfono, avísame y le restablezco la verificación.</p></div>
+        <div class="panel"><h2>Alertas</h2>
+          <button class="link-btn" id="secReadAll">Marcar todas como leídas</button>
+          <div style="overflow-x:auto;"><table id="tblAlerts"><thead><tr><th>Fecha</th><th>Nivel</th><th>Tipo</th><th>Alerta</th><th></th></tr></thead><tbody></tbody></table></div>
+          <p class="empty" id="emptyAlerts">Sin alertas.</p></div>
+        <div class="panel"><h2>Solicitudes de autorización</h2>
+          <div style="overflow-x:auto;"><table id="tblReq"><thead><tr><th>Fecha</th><th>Usuario</th><th>Módulo</th><th>Motivo</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table></div>
+          <p class="empty" id="emptyReq">Sin solicitudes.</p></div>
+        <div class="panel"><h2>Usuarios y permisos</h2>
+          <div style="overflow-x:auto;"><table id="tblUsers"><thead><tr><th>Correo</th><th>Rol</th><th>Activo</th><th>Acceso a módulos</th><th></th></tr></thead><tbody></tbody></table></div>
+          <p class="empty" style="display:block;">Admin: todo. Supervisor: ve e ingresa; modificar o eliminar requiere tu autorización. Visor: solo consulta.</p></div>
+        <div class="panel"><h2>Correos autorizados para tener cuenta</h2>
+          <form id="allowForm" class="form-grid"><div class="field span2"><label for="allowEmail">Agregar correo</label><input type="email" id="allowEmail" required placeholder="nombre@mave.com"></div>
+            <div class="field"><button type="submit" class="btn btn-primary" style="width:auto;margin-top:26px;">Autorizar</button></div></form>
+          <div id="allowList" style="margin-top:10px;"></div>
+          <p class="empty" style="display:block;">Después de autorizar el correo, crea la cuenta en Supabase → Authentication → Users → Add user. Nadie más puede registrarse.</p></div>
+        <div class="panel"><h2>Accesos recientes</h2>
+          <div style="overflow-x:auto;"><table id="tblLogins"><thead><tr><th>Fecha</th><th>Correo</th><th>Resultado</th><th>IP</th><th>Señales</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="panel"><h2>Historial de modificaciones</h2>
+          <div style="overflow-x:auto;"><table id="tblAudit"><thead><tr><th>Fecha</th><th>Usuario</th><th>Tabla</th><th>Acción</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="panel"><h2>Umbrales de alerta</h2>
+          <form id="setForm"><div class="form-grid">
+            <div class="field"><label for="setSale">Venta grande (USD)</label><input type="number" id="setSale" min="0" step="any"></div>
+            <div class="field"><label for="setExp">Gasto grande (USD)</label><input type="number" id="setExp" min="0" step="any"></div>
+            <div class="field"><label for="setStock">Movimiento de stock (unidades)</label><input type="number" id="setStock" min="1" step="1"></div>
+            <div class="field"><label for="setNs">Horario inusual desde (hora)</label><input type="number" id="setNs" min="0" max="23" step="1"></div>
+            <div class="field"><label for="setNe">hasta (hora)</label><input type="number" id="setNe" min="0" max="23" step="1"></div>
+          </div><div class="form-actions"><button type="submit" class="btn btn-primary" style="width:auto;">Guardar umbrales</button></div></form></div>
+      </section>
+
+      <section class="view" id="view-insumos">
+        <div class="view-header">
+          <h1>Insumos y gastos</h1>
+          <p>Registra empaques, cajas, etiquetas, envíos locales y otros gastos operativos.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Nuevo gasto</h2>
+          <form id="expenseForm">
+            <div class="form-grid">
+              <div class="field span2">
+                <label for="expDesc">Descripción</label>
+                <input type="text" id="expDesc" required placeholder="Ej. Cajas de empaque x50">
+              </div>
+              <div class="field">
+                <label for="expDate">Fecha</label>
+                <input type="date" id="expDate" required>
+              </div>
+              <div class="field">
+                <label for="expAmount">Monto (USD)</label>
+                <input type="number" id="expAmount" min="0" step="0.01" required placeholder="0.00">
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" style="width:auto;">Registrar gasto</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>Historial de gastos</h2>
+          <div style="overflow-x:auto;">
+          <table id="tblGastos">
+            <thead><tr><th>Fecha</th><th>Descripción</th><th>Monto USD</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          </div>
+          <div class="empty-state" id="emptyGastos" style="display:none;">Aún no hay gastos registrados.</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ---------- Modal: cambiar contraseña ---------- -->
+<div class="modal-overlay" id="passModalOverlay">
+  <div class="modal">
+    <h3>Cambiar contraseña</h3>
+    <form id="changePassForm">
+      <div class="field">
+        <label for="curPass">Contraseña actual</label>
+        <input type="password" id="curPass" required>
+      </div>
+      <div class="field">
+        <label for="newPass">Nueva contraseña</label>
+        <input type="password" id="newPass" required minlength="6">
+      </div>
+      <p style="color:var(--danger); font-size:12.5px; display:none;" id="passModalError"></p>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary" style="width:auto;">Actualizar</button>
+        <button type="button" class="btn btn-ghost" id="passModalCancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* Si la librería de Supabase no cargó, avisar en vez de quedarse mudo */
+  if(!window.supabase){
+    document.getElementById('loginForm').addEventListener('submit', function(e){ e.preventDefault(); });
+    const le = document.getElementById('loginError');
+    le.textContent = 'No se pudo conectar con Supabase. Abre este archivo desde tu computador con internet (no desde la vista previa del chat).';
+    le.style.display = 'block';
+    return;
+  }
+
+  /* ===================== SUPABASE CLIENT ===================== */
+  const SUPABASE_URL = 'https://aagsotpxkvjeblmbcbtd.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_l7d_aPCwLSU8mdBv2jCQnQ_xAYNmWW9';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let products = [];
+  let sales = [];
+  let salePayments = [];
+  let expenses = [];
+  let pedidos = [];
+
+  function todayLocal(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function fmtUSD(n){ n = Number(n)||0; return '$' + n.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function fmtMXN(n){ n = Number(n)||0; return '$' + n.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}) + ' MXN'; }
+  function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+
+  let toastTimer = null;
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> t.classList.remove('show'), 2600);
+  }
+
+  /* ===================== ROW <-> OBJECT MAPPERS ===================== */
+  function rowToProduct(r){
+    return { id:r.id, photo:r.photo||'', name:r.name, desc:r.description||'', precioMXN:Number(r.precio_mxn), tasa:Number(r.tasa), exportCost:Number(r.export_cost), costoUSD:Number(r.costo_usd), ventaUSD:Number(r.venta_usd), stock:Number(r.stock) };
+  }
+  function productToRow(p){
+    return { photo:p.photo||null, name:p.name, description:p.desc||null, precio_mxn:p.precioMXN, tasa:p.tasa, export_cost:p.exportCost, costo_usd:p.costoUSD, venta_usd:p.ventaUSD, stock:p.stock };
+  }
+  function rowToSale(r){
+    return { id:r.id, productId:r.product_id, productName:r.product_name, client:r.client, qty:Number(r.qty), date:r.date, totalUSD:Number(r.total_usd), costoUnitario:Number(r.costo_unitario), profitUSD:Number(r.profit_usd), paymentType:r.payment_type, phone:r.contact_phone, advisor:r.advisor };
+  }
+  function saleToRow(s){
+    return { product_id:s.productId, product_name:s.productName, client:s.client, qty:s.qty, date:s.date, total_usd:s.totalUSD, costo_unitario:s.costoUnitario, profit_usd:s.profitUSD };
+  }
+  function rowToExpense(r){
+    return { id:r.id, desc:r.description, date:r.date, amountUSD:Number(r.amount_usd) };
+  }
+  function expenseToRow(e){
+    return { description:e.desc, date:e.date, amount_usd:e.amountUSD };
+  }
+  function rowToPedido(r){
+    return { id:r.id, number:Number(r.number), date:r.date, productId:r.product_id, productName:r.product_name, qty:Number(r.qty), costoUnitario:Number(r.costo_unitario), costoTotalPedido:Number(r.costo_total), ventaUSD:Number(r.venta_usd), delivery:!!r.delivery, deliveryCost:Number(r.delivery_cost) };
+  }
+  function pedidoToRow(p){
+    return { date:p.date, product_id:p.productId, product_name:p.productName, qty:p.qty, costo_unitario:p.costoUnitario, costo_total:p.costoTotalPedido, venta_usd:p.ventaUSD, delivery:p.delivery, delivery_cost:p.deliveryCost };
+  }
+
+  /* ===================== DATA LOADING ===================== */
+  async function fetchProducts(){
+    const {data, error} = await sb.from('products').select('*').order('created_at', {ascending:true});
+    if(error){ console.error(error); showToast('No se pudo cargar el inventario.'); return []; }
+    return data.map(rowToProduct);
+  }
+  async function fetchSales(){
+    const {data, error} = await sb.from('sales').select('*').order('created_at', {ascending:false});
+    if(error){ console.error(error); showToast('No se pudo cargar el historial de ventas.'); return []; }
+    return data.map(rowToSale);
+  }
+  async function fetchSalePayments(){
+    const {data, error} = await sb.from('sale_payments').select('*').order('number', {ascending:true});
+    if(error){ console.error(error); return []; }
+    return data.map(r=>({ id:r.id, saleId:r.sale_id, number:r.number, due:r.due_date, amount:Number(r.amount), paid:r.paid }));
+  }
+  async function fetchExpenses(){
+    const {data, error} = await sb.from('expenses').select('*').order('created_at', {ascending:false});
+    if(error){ console.error(error); showToast('No se pudo cargar los gastos.'); return []; }
+    return data.map(rowToExpense);
+  }
+  async function fetchPedidos(){
+    const {data, error} = await sb.from('pedidos').select('*').order('number', {ascending:false});
+    if(error){ console.error(error); showToast('No se pudo cargar los pedidos.'); return []; }
+    return data.map(rowToPedido);
+  }
+  async function refreshAllData(){
+    [products, sales, expenses, pedidos, salePayments] = await Promise.all([fetchProducts(), fetchSales(), fetchExpenses(), fetchPedidos(), fetchSalePayments()]);
+    await fetchImportData();
+    await fetchSecurity();
+  }
+  function renderRowsIfIdle(){ if(!document.activeElement || !impForm.contains(document.activeElement)) renderImpRows(); }
+  function renderAll(){
+    renderInventory(); renderSaleProductOptions(); renderSales(); renderExpenses();
+    renderPedidoProductOptions(); renderPedidos(); renderImports(); renderRowsIfIdle(); renderSecurity(); renderDashboard();
+  }
+
+  /* ===================== IMPORTACIONES ===================== */
+  let currencies = [], imports = [], impItems = [], impCosts = [];
+  let impF = { items: [], costs: [] };
+  const COST_LABEL = { bodega:'Bodega', proveedor:'Cargo fijo del proveedor', envio:'Envío', otro:'Otro' };
+  const PAY_LABEL = { contado:'Contado', ach:'ACH', paypal:'PayPal', tarjeta:'Tarjeta' };
+  const rateCache = {};
+
+  async function fetchImportData(){
+    const [c, i, it, co] = await Promise.all([
+      sb.from('currencies').select('*').order('code'),
+      sb.from('imports').select('*').order('number', {ascending:false}),
+      sb.from('import_items').select('*'), sb.from('import_costs').select('*')
+    ]);
+    currencies = c.data || []; imports = i.data || []; impItems = it.data || []; impCosts = co.data || [];
+  }
+  function curLabel(c){ return c.code + ' — ' + c.name + (c.countries ? ' (' + c.countries + ')' : ''); }
+  function parseCur(v){
+    const code = String(v||'').trim().split(/\s|—/)[0].toUpperCase();
+    return currencies.some(c=>c.code === code) ? code : null;
+  }
+  async function fetchRate(code){
+    if(code === 'USD') return 1;
+    if(!rateCache.t){
+      try{ const r = await fetch('https://open.er-api.com/v6/latest/USD'); rateCache.t = (await r.json()).rates || {}; }
+      catch(e){ rateCache.t = {}; }
+    }
+    return rateCache.t[code] || null;
+  }
+  // misma fórmula que la base de datos (receive_import)
+  function calcImport(h, items, costs){
+    const f = h.taxIncl ? 1 : 1 + h.taxPct/100;
+    const units = items.reduce((a,i)=>a + i.qty, 0);
+    const totalWt = items.reduce((a,i)=>a + i.qty*i.price*f, 0);
+    const extras = costs.reduce((a,c)=>a + (c.rate > 0 ? c.amount / c.rate : 0), 0);
+    const rows = items.map(i=>{
+      const alloc = (h.alloc === 'valor' && totalWt > 0) ? extras*i.price*f/totalWt : (units ? extras/units : 0);
+      return h.rate > 0 ? i.price*(f + h.comm/100)/h.rate + alloc : 0;
+    });
+    return { rows, extras, total: rows.reduce((a,u,k)=>a + u*items[k].qty, 0) };
+  }
+  function readImpHeader(){
+    const v = id => document.getElementById(id).value;
+    return { date:v('impDate'), supplier:v('impSupplier').trim(), country:v('impCountry').trim(), pay:v('impPay'),
+      cur:parseCur(v('impCurrency')), rate:Number(v('impRate'))||0, taxPct:Number(v('impTaxPct'))||0,
+      taxIncl:v('impTaxIncl') === '1', comm:Number(v('impComm'))||0, alloc:v('impAlloc') };
+  }
+  function resetImpForm(){
+    impF = { items:[{pid:'',name:'',qty:1,price:0,venta:0}], costs:[] };
+    document.getElementById('impForm').reset();
+    document.getElementById('impDate').value = todayLocal();
+    renderImpRows(); refreshImpPreview();
+  }
+  function renderImpRows(){
+    document.querySelector('#impItemsTbl tbody').innerHTML = impF.items.map((r,i)=>
+      '<tr data-i="'+i+'"><td><select data-k="pid"><option value="">Producto nuevo</option>'+
+      products.map(p=>'<option value="'+p.id+'"'+(p.id===r.pid?' selected':'')+'>'+escapeHtml(p.name)+'</option>').join('')+'</select></td>'+
+      '<td><input data-k="name" type="text" value="'+escapeHtml(r.name)+'"'+(r.pid?' disabled':'')+'></td>'+
+      '<td><input data-k="qty" type="number" min="1" step="1" value="'+r.qty+'" style="width:80px"></td>'+
+      '<td><input data-k="price" type="number" min="0" step="any" value="'+r.price+'" style="width:110px"></td>'+
+      '<td><input data-k="venta" type="number" min="0" step="any" value="'+r.venta+'" style="width:100px"></td>'+
+      '<td><button type="button" class="link-btn danger" data-rm="'+i+'">Quitar</button></td></tr>').join('');
+    document.querySelector('#impCostsTbl tbody').innerHTML = impF.costs.map((r,i)=>
+      '<tr data-i="'+i+'"><td><select data-k="kind">'+Object.keys(COST_LABEL).map(k=>'<option value="'+k+'"'+(k===r.kind?' selected':'')+'>'+COST_LABEL[k]+'</option>').join('')+'</select></td>'+
+      '<td><input data-k="desc" type="text" value="'+escapeHtml(r.desc)+'"></td>'+
+      '<td><input data-k="amount" type="number" min="0" step="any" value="'+r.amount+'" style="width:110px"></td>'+
+      '<td><input data-k="cur" type="text" list="currencyList" value="'+escapeHtml(r.cur)+'" style="width:150px" autocomplete="off"></td>'+
+      '<td><input data-k="rate" type="number" min="0" step="any" value="'+r.rate+'" style="width:100px"></td>'+
+      '<td><button type="button" class="link-btn danger" data-rmc="'+i+'">Quitar</button></td></tr>').join('');
+  }
+  function refreshImpPreview(){
+    const h = readImpHeader();
+    const items = impF.items.filter(r=>r.qty > 0 && (r.pid || r.name.trim()));
+    const costs = impF.costs.map(c=>({ amount:Number(c.amount)||0, rate:Number(c.rate)||0 }));
+    const el = document.getElementById('impPreview');
+    if(!items.length || !h.rate){ el.innerHTML = 'Completa la moneda, la tasa y al menos un producto para ver el costo.'; return; }
+    const r = calcImport(h, items.map(i=>({qty:Number(i.qty), price:Number(i.price)||0})), costs);
+    el.innerHTML = 'Costo unitario USD: ' + items.map((i,k)=>escapeHtml((i.pid ? (products.find(p=>p.id===i.pid)||{}).name : i.name) || '—')+' <b>'+fmtUSD(r.rows[k])+'</b>').join(' · ') +
+      '<br>Costos adicionales: <b>'+fmtUSD(r.extras)+'</b> · Total de la importación: <b>'+fmtUSD(r.total)+'</b>';
+  }
+
+  const impForm = document.getElementById('impForm');
+  impForm.addEventListener('input', function(e){
+    const k = e.target.dataset.k, tr = e.target.closest('tr');
+    if(k && tr){
+      const list = tr.closest('#impCostsTbl') ? impF.costs : impF.items, row = list[Number(tr.dataset.i)];
+      row[k] = ['qty','price','venta','amount','rate'].includes(k) ? e.target.value : e.target.value;
+    }
+    refreshImpPreview();
+  });
+  impForm.addEventListener('change', async function(e){
+    const k = e.target.dataset.k, tr = e.target.closest('tr');
+    if(e.target.id === 'impCurrency'){
+      const code = parseCur(e.target.value);
+      if(code){ e.target.value = code; const r = await fetchRate(code); if(r) document.getElementById('impRate').value = r; else showToast('No se pudo obtener la tasa; escríbela a mano.'); }
+      refreshImpPreview(); return;
+    }
+    if(!k || !tr) return;
+    const i = Number(tr.dataset.i);
+    if(tr.closest('#impItemsTbl') && k === 'pid'){
+      impF.items[i].pid = e.target.value;
+      const p = products.find(x=>x.id === e.target.value);
+      impF.items[i].name = p ? p.name : '';
+      if(p && !Number(impF.items[i].venta)) impF.items[i].venta = p.ventaUSD;
+      renderImpRows();
+    } else if(tr.closest('#impCostsTbl') && k === 'cur'){
+      const code = parseCur(e.target.value);
+      impF.costs[i].cur = code || e.target.value;
+      if(code){ const r = await fetchRate(code); if(r) impF.costs[i].rate = r; }
+      renderImpRows();
+    }
+    refreshImpPreview();
+  });
+  impForm.addEventListener('click', function(e){
+    if(e.target.dataset.rm !== undefined){ impF.items.splice(Number(e.target.dataset.rm), 1); if(!impF.items.length) impF.items.push({pid:'',name:'',qty:1,price:0,venta:0}); renderImpRows(); refreshImpPreview(); }
+    if(e.target.dataset.rmc !== undefined){ impF.costs.splice(Number(e.target.dataset.rmc), 1); renderImpRows(); refreshImpPreview(); }
+  });
+  document.getElementById('impAddItem').addEventListener('click', ()=>{ impF.items.push({pid:'',name:'',qty:1,price:0,venta:0}); renderImpRows(); });
+  document.getElementById('impAddCost').addEventListener('click', ()=>{ impF.costs.push({kind:'bodega',desc:'',amount:0,cur:'',rate:0}); renderImpRows(); });
+
+  async function saveImport(receive){
+    const h = readImpHeader();
+    if(!h.cur){ showToast('Elige una moneda de la lista.'); return; }
+    if(!(h.rate > 0)){ showToast('Indica la tasa de cambio.'); return; }
+    const items = impF.items.filter(r=>r.pid || r.name.trim());
+    if(!items.length){ showToast('Agrega al menos un producto.'); return; }
+    if(items.some(r=>!(Number(r.qty) >= 1))){ showToast('Revisa las cantidades.'); return; }
+    const costs = impF.costs.filter(c=>Number(c.amount) > 0);
+    for(const c of costs){ if(!parseCur(c.cur) || !(Number(c.rate) > 0)){ showToast('Cada costo adicional necesita moneda y tasa.'); return; } }
+
+    const { data: imp, error } = await sb.from('imports').insert({
+      date:h.date || todayLocal(), supplier:h.supplier || null, origin_country:h.country || null, currency:h.cur, rate_per_usd:h.rate,
+      commission_pct:h.comm, tax_pct:h.taxPct, tax_included:h.taxIncl, allocation:h.alloc, payment_method:h.pay
+    }).select().single();
+    if(error){ console.error(error); showToast(error.message || 'No se pudo guardar la importación.'); return; }
+    const e1 = await sb.from('import_items').insert(items.map(r=>({ import_id:imp.id, product_id:r.pid || null,
+      product_name:(r.pid ? (products.find(p=>p.id===r.pid)||{}).name : r.name.trim()), qty:Number(r.qty), unit_price:Number(r.price)||0, venta_usd:Number(r.venta)||0 })));
+    const e2 = costs.length ? await sb.from('import_costs').insert(costs.map(c=>({ import_id:imp.id, kind:c.kind, description:c.desc || null,
+      amount:Number(c.amount), currency:parseCur(c.cur), rate_per_usd:Number(c.rate) }))) : {};
+    if(e1.error || e2.error){ console.error(e1.error || e2.error); await sb.from('imports').delete().eq('id', imp.id); showToast('No se pudo guardar los productos o costos.'); return; }
+    if(receive){
+      const { error: re } = await sb.rpc('receive_import', { p_import: imp.id });
+      if(re){ console.error(re); showToast(re.message || 'Se guardó como borrador, pero no se pudo recibir.'); }
+      else showToast('Importación recibida: inventario actualizado.');
+    } else showToast('Borrador guardado.');
+    await refreshAllData(); resetImpForm(); renderAll();
+  }
+  impForm.addEventListener('submit', e=>{ e.preventDefault(); saveImport(true); });
+  document.getElementById('impSaveDraft').addEventListener('click', ()=>saveImport(false));
+
+  function renderImports(){
+    const dl = document.getElementById('currencyList');
+    if(dl.children.length !== currencies.length) dl.innerHTML = currencies.map(c=>'<option value="'+escapeHtml(curLabel(c))+'"></option>').join('');
+    const tbody = document.querySelector('#tblImp tbody');
+    document.getElementById('emptyImp').style.display = imports.length ? 'none' : 'block';
+    tbody.innerHTML = imports.map(im=>{
+      const its = impItems.filter(x=>x.import_id === im.id), cs = impCosts.filter(x=>x.import_id === im.id);
+      const total = im.status === 'recibida' ? its.reduce((a,x)=>a + x.qty*Number(x.landed_unit_cost_usd||0), 0) :
+        calcImport({ rate:Number(im.rate_per_usd), taxPct:Number(im.tax_pct), taxIncl:im.tax_included, comm:Number(im.commission_pct), alloc:im.allocation },
+          its.map(x=>({qty:x.qty, price:Number(x.unit_price)})), cs.map(c=>({amount:Number(c.amount), rate:Number(c.rate_per_usd)}))).total;
+      return '<tr><td data-label="#">'+im.number+'</td><td data-label="Fecha">'+im.date+'</td>'+
+        '<td data-label="Proveedor">'+escapeHtml(im.supplier||'—')+(im.origin_country ? '<br><small>'+escapeHtml(im.origin_country)+'</small>' : '')+'</td>'+
+        '<td data-label="Moneda">'+im.currency+' <small>('+Number(im.rate_per_usd)+')</small></td><td data-label="Pago">'+(PAY_LABEL[im.payment_method]||'')+'</td>'+
+        '<td data-label="Prod.">'+its.length+'</td><td data-label="Total USD">'+fmtUSD(total)+'</td>'+
+        '<td data-label="Estado">'+(im.status === 'recibida' ? '<span class="pos">Recibida</span>' : 'Borrador')+'</td>'+
+        '<td data-label="">'+(im.status === 'borrador' ? '<button class="link-btn" data-recv="'+im.id+'">Recibir</button> <button class="link-btn danger" data-delimp="'+im.id+'">Eliminar</button>' : '')+'</td></tr>';
+    }).join('');
+    tbody.querySelectorAll('[data-recv]').forEach(b=>b.addEventListener('click', async ()=>{
+      if(!confirm('¿Recibir esta importación? Se sumará al inventario y ya no podrá editarse.')) return;
+      const { error } = await sb.rpc('receive_import', { p_import: b.dataset.recv });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo recibir.'); return; }
+      await refreshAllData(); renderAll(); showToast('Importación recibida.');
+    }));
+    tbody.querySelectorAll('[data-delimp]').forEach(b=>b.addEventListener('click', async ()=>{
+      if(!confirm('¿Eliminar este borrador?')) return;
+      const { error } = await sb.from('imports').delete().eq('id', b.dataset.delimp);
+      if(error){ console.error(error); showToast(error.message || 'No se pudo eliminar.'); return; }
+      await refreshAllData(); renderAll();
+    }));
+  }
+  resetImpForm();
+
+  /* ===================== SEGURIDAD (admin) ===================== */
+  let sec = { alerts:[], requests:[], users:[], allowed:[], logins:[], audit:[], settings:null };
+  let lastUnread = null;
+  const fmtDT = d => d ? new Date(d).toLocaleString([], {dateStyle:'short', timeStyle:'short'}) : '';
+  async function fetchSecurity(){
+    if(!me || me.role !== 'admin') return;
+    const q = (t, sel, col, n) => sb.from(t).select(sel).order(col, {ascending:false}).limit(n);
+    const [a, r, u, al, lg, au, st] = await Promise.all([
+      q('alerts','*','created_at',100), q('change_requests','*','created_at',50), sb.from('profiles').select('*').order('email'),
+      sb.from('allowed_emails').select('*').order('email'), q('login_events','*','at',40),
+      q('audit_log','at,user_email,table_name,action','at',100), sb.from('app_settings').select('*').limit(1)
+    ]);
+    sec = { alerts:a.data||[], requests:r.data||[], users:u.data||[], allowed:al.data||[], logins:lg.data||[], audit:au.data||[], settings:(st.data||[])[0]||null };
+  }
+  function updateSecBadge(notify){
+    const n = sec.alerts.filter(x=>!x.read_at).length;
+    document.getElementById('secBadge').textContent = n ? '(' + n + ')' : '';
+    if(notify && lastUnread !== null && n > lastUnread) showToast('Nueva alerta de seguridad.');
+    lastUnread = n;
+  }
+  const SEV = { critical:'🔴 Crítica', warning:'🟠 Aviso', info:'🔵 Info' };
+  function renderSecurity(){
+    if(!me || me.role !== 'admin') return;
+    updateSecBadge(false);
+    const T = id => document.querySelector('#'+id+' tbody');
+    document.getElementById('emptyAlerts').style.display = sec.alerts.length ? 'none' : 'block';
+    T('tblAlerts').innerHTML = sec.alerts.map(a=>'<tr style="'+(a.read_at?'opacity:.55':'font-weight:600')+'"><td>'+fmtDT(a.created_at)+'</td><td>'+(SEV[a.severity]||a.severity)+'</td><td>'+escapeHtml(a.kind)+'</td><td>'+escapeHtml(a.title)+
+      (a.detail ? '<br><small>'+escapeHtml(JSON.stringify(a.detail))+'</small>' : '')+'</td><td>'+(a.read_at ? '' : '<button class="link-btn" data-aread="'+a.id+'">Leída</button>')+'</td></tr>').join('');
+    document.getElementById('emptyReq').style.display = sec.requests.length ? 'none' : 'block';
+    T('tblReq').innerHTML = sec.requests.map(r=>'<tr><td>'+fmtDT(r.created_at)+'</td><td>'+escapeHtml(r.user_email||'')+'</td><td>'+escapeHtml(MOD_NAME[r.module]||r.module)+'</td><td>'+escapeHtml(r.reason||'')+'</td><td>'+r.status+
+      (r.expires_at && r.status==='aprobada' ? '<br><small>hasta '+fmtDT(r.expires_at)+'</small>' : '')+'</td><td>'+(r.status==='pendiente' ?
+      '<select data-min="'+r.id+'"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="60">1 h</option><option value="120">2 h</option></select> <button class="link-btn" data-aprob="'+r.id+'">Aprobar</button> <button class="link-btn danger" data-deny="'+r.id+'">Denegar</button>' : '')+'</td></tr>').join('');
+    T('tblUsers').innerHTML = sec.users.map(u=>{
+      const self = u.id === me.id, perms = u.permissions || {};
+      return '<tr data-uid="'+u.id+'"><td>'+escapeHtml(u.email||'')+'</td><td><select data-f="role"'+(self?' disabled':'')+'>'+['admin','supervisor','viewer'].map(r=>'<option value="'+r+'"'+(r===u.role?' selected':'')+'>'+({admin:'Administrador',supervisor:'Supervisor',viewer:'Visor'}[r])+'</option>').join('')+'</select></td>'+
+        '<td><input type="checkbox" data-f="active"'+(u.active?' checked':'')+(self?' disabled':'')+'></td><td>'+MODULES.map(m=>'<label style="margin-right:8px;white-space:nowrap;"><input type="checkbox" data-m="'+m+'"'+(perms[m]!=='none'?' checked':'')+'> '+MOD_NAME[m]+'</label>').join('')+'</td>'+
+        '<td><button class="link-btn" data-saveu="'+u.id+'">Guardar</button></td></tr>';
+    }).join('');
+    document.getElementById('allowList').innerHTML = sec.allowed.map(x=>'<span style="display:inline-block;margin:0 10px 6px 0;">'+escapeHtml(x.email)+' <button class="link-btn danger" data-rmallow="'+escapeHtml(x.email)+'">Quitar</button></span>').join('');
+    T('tblLogins').innerHTML = sec.logins.map(l=>'<tr><td>'+fmtDT(l.at)+'</td><td>'+escapeHtml(l.email||'')+'</td><td>'+(l.success?'✓ Entró':'✗ Falló')+'</td><td>'+escapeHtml(l.ip||'')+'</td><td>'+escapeHtml((l.flags||[]).join(', '))+'</td></tr>').join('');
+    T('tblAudit').innerHTML = sec.audit.map(a=>'<tr><td>'+fmtDT(a.at)+'</td><td>'+escapeHtml(a.user_email||'—')+'</td><td>'+escapeHtml(a.table_name)+'</td><td>'+escapeHtml(a.action)+'</td></tr>').join('');
+    const st = sec.settings;
+    if(st && !document.getElementById('setForm').contains(document.activeElement)){
+      document.getElementById('setSale').value = st.large_sale_usd; document.getElementById('setExp').value = st.large_expense_usd;
+      document.getElementById('setStock').value = st.stock_change_units; document.getElementById('setNs').value = st.night_start; document.getElementById('setNe').value = st.night_end;
+    }
+  }
+  async function secReload(){ await fetchSecurity(); renderSecurity(); }
+  const done = (error, ok) => { if(error){ console.error(error); showToast(error.message || 'No se pudo completar la acción.'); } else showToast(ok); return !error; };
+  document.getElementById('view-seguridad').addEventListener('click', async function(e){
+    const d = e.target.dataset;
+    if(d.aread){ await sb.from('alerts').update({read_at:new Date().toISOString(), read_by:me.id}).eq('id', d.aread); secReload(); }
+    if(d.aprob || d.deny){
+      const id = d.aprob || d.deny, mins = Number(document.querySelector('[data-min="'+id+'"]').value);
+      const { error } = await sb.rpc('decide_request', { p_id:id, p_approve:!!d.aprob, p_minutes:mins });
+      if(done(error, d.aprob ? 'Autorización concedida por '+mins+' min.' : 'Solicitud denegada.')) secReload();
+    }
+    if(d.saveu){
+      const tr = e.target.closest('tr'), old = (sec.users.find(u=>u.id===d.saveu)||{}).permissions || {}, perms = {...old};
+      tr.querySelectorAll('[data-m]').forEach(c=>{ perms[c.dataset.m] = c.checked ? (old[c.dataset.m] && old[c.dataset.m] !== 'none' ? old[c.dataset.m] : 'view') : 'none'; });
+      const upd = { permissions: perms };
+      if(d.saveu !== me.id){ upd.role = tr.querySelector('[data-f="role"]').value; upd.active = tr.querySelector('[data-f="active"]').checked; }
+      const { error } = await sb.from('profiles').update(upd).eq('id', d.saveu);
+      if(done(error, 'Usuario actualizado.')) secReload();
+    }
+    if(d.rmallow){
+      if(!confirm('¿Quitar '+d.rmallow+' de los correos autorizados? (No elimina su cuenta existente.)')) return;
+      const { error } = await sb.from('allowed_emails').delete().eq('email', d.rmallow);
+      if(done(error, 'Correo quitado.')) secReload();
+    }
+  });
+  document.getElementById('secReadAll').addEventListener('click', async ()=>{ await sb.from('alerts').update({read_at:new Date().toISOString(), read_by:me.id}).is('read_at', null); secReload(); });
+  document.getElementById('allowForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const email = document.getElementById('allowEmail').value.trim().toLowerCase();
+    const { error } = await sb.from('allowed_emails').insert({ email, added_by: me.id });
+    if(done(error, 'Correo autorizado. Ahora crea la cuenta en Supabase.')){ this.reset(); secReload(); }
+  });
+  document.getElementById('setForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const v = id => Number(document.getElementById(id).value);
+    const { error } = await sb.from('app_settings').update({ large_sale_usd:v('setSale'), large_expense_usd:v('setExp'), stock_change_units:v('setStock'), night_start:v('setNs'), night_end:v('setNe') }).eq('id', true);
+    if(done(error, 'Umbrales guardados.')) secReload();
+  });
+  document.querySelector('nav.sidenav [data-view="seguridad"]').addEventListener('click', secReload);
+  setInterval(async ()=>{ if(me && me.role === 'admin'){ await fetchSecurity(); updateSecBadge(true); } }, 60000);
+
+  /* ===================== LOGIN (Supabase Auth) ===================== */
+  const loginScreen = document.getElementById('loginScreen');
+  const appEl = document.getElementById('app');
+
+  /* ===================== PERFIL Y PERMISOS ===================== */
+  let me = null, authz = {};
+  const MODULES = ['inventario','pedidos','ventas','insumos','importaciones'];
+  const MOD_NAME = { inventario:'Inventario', pedidos:'Pedidos', ventas:'Ventas', insumos:'Insumos y gastos', importaciones:'Importaciones' };
+  const DENIED_MSG = 'Tu acceso está desactivado o aún no tiene permisos. Contacta al administrador.';
+  // ver: admin o permiso distinto de "none"; Pedidos (módulo antiguo) solo admin
+  function canView(mod){
+    if(!me || !me.active) return false;
+    if(me.role === 'admin') return true;
+    if(mod === 'pedidos') return false;
+    return (me.permissions || {})[mod] !== 'none';
+  }
+  function canInsert(mod){ return canView(mod) && (me.role === 'admin' || me.role === 'supervisor'); }
+  // modificar o eliminar: admin siempre; supervisor solo con autorización vigente
+  function canEdit(mod){
+    if(!canView(mod)) return false;
+    if(me.role === 'admin') return true;
+    return me.role === 'supervisor' && !!authz[mod] && authz[mod] > Date.now();
+  }
+  /* ===================== VERIFICACIÓN EN DOS PASOS ===================== */
+  let denyMsg = DENIED_MSG;
+  function mfaShow(html){ const b = document.getElementById('mfaBox'); document.getElementById('mfaCard').innerHTML = html; b.style.display = 'flex'; }
+  function mfaHide(){ document.getElementById('mfaBox').style.display = 'none'; }
+  function mfaAsk(factorId, intro, onCancelText){
+    return new Promise(resolve=>{
+      const card = document.getElementById('mfaCard');
+      const wire = () => {
+        const code = document.getElementById('mfaCode'), err = document.getElementById('mfaErr');
+        code.focus();
+        const go = async () => {
+          const v = code.value.replace(/\s/g, '');
+          if(!/^\d{6}$/.test(v)){ err.textContent = 'Escribe los 6 dígitos.'; return; }
+          document.getElementById('mfaOk').disabled = true;
+          const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code: v });
+          if(error){ err.textContent = 'Código incorrecto o vencido. Inténtalo de nuevo.'; document.getElementById('mfaOk').disabled = false; code.value = ''; code.focus(); return; }
+          mfaHide(); resolve(true);
+        };
+        document.getElementById('mfaOk').addEventListener('click', go);
+        code.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); go(); } });
+        document.getElementById('mfaCancel').addEventListener('click', ()=>{ mfaHide(); resolve(false); });
+      };
+      card.innerHTML = intro + '<input id="mfaCode" type="text" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="000000" style="width:100%;font-size:22px;letter-spacing:6px;text-align:center;margin:10px 0;">' +
+        '<p id="mfaErr" style="color:#b00020;min-height:20px;margin:0 0 8px;font-size:14px;"></p>' +
+        '<button type="button" class="btn btn-primary" id="mfaOk" style="width:100%;">Verificar</button> ' +
+        '<button type="button" class="link-btn" id="mfaCancel" style="margin-top:8px;">' + onCancelText + '</button>';
+      document.getElementById('mfaBox').style.display = 'flex';
+      wire();
+    });
+  }
+  async function mfaVerify(factorId){
+    return mfaAsk(factorId, '<h2 style="margin-top:0;">Verificación en dos pasos</h2><p>Escribe el código de 6 dígitos que muestra tu app autenticadora.</p>', 'Cancelar');
+  }
+  async function mfaEnroll(){
+    const { data: fl } = await sb.auth.mfa.listFactors();
+    for(const f of ((fl && fl.all) || [])) if(f.status !== 'verified') await sb.auth.mfa.unenroll({ factorId: f.id });
+    const { data, error } = await sb.auth.mfa.enroll({ factorType:'totp', friendlyName:'MAVE ' + Date.now() });
+    if(error){ console.error(error); showToast(error.message || 'No se pudo iniciar la verificación en dos pasos.'); return false; }
+    const intro = '<h2 style="margin-top:0;">Activa la verificación en dos pasos</h2>' +
+      '<p style="font-size:14px;">1. Instala <b>Google Authenticator</b>, <b>Microsoft Authenticator</b> o <b>Authy</b> en tu teléfono.<br>2. Escanea este código QR:</p>' +
+      '<div style="text-align:center;"><img alt="Código QR" src="' + data.totp.qr_code + '" style="width:190px;height:190px;"></div>' +
+      '<p style="font-size:13px;word-break:break-all;">¿No puedes escanearlo? Clave manual:<br><code>' + escapeHtml(data.totp.secret) + '</code></p>' +
+      '<p style="font-size:14px;">3. Escribe el código de 6 dígitos que aparece en la app:</p>';
+    return mfaAsk(data.id, intro, 'Cancelar y salir');
+  }
+  async function mfaGate(){
+    const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    const { data: fl } = await sb.auth.mfa.listFactors();
+    const verified = (fl && fl.totp) || [];
+    if(verified.length){
+      if(aal && aal.currentLevel === 'aal2') return true;
+      return mfaVerify(verified[0].id);
+    }
+    if(me.role === 'admin' || me.role === 'supervisor') return mfaEnroll();   // obligatoria para admin y supervisor
+    return true;
+  }
+
+  async function loadProfile(){
+    const { data: { user } } = await sb.auth.getUser();
+    if(!user) return null;
+    const { data, error } = await sb.from('profiles').select('*').eq('id', user.id).single();
+    return error ? null : data;
+  }
+  async function refreshAuthz(){
+    if(!me || me.role !== 'supervisor'){ authz = {}; return; }
+    const { data } = await sb.from('change_requests').select('module,status,expires_at').eq('user_id', me.id).order('created_at', {ascending:false}).limit(30);
+    authz = {}; const pend = [];
+    (data || []).forEach(r=>{
+      if(r.status === 'aprobada' && r.expires_at && Date.parse(r.expires_at) > Date.now()) authz[r.module] = Math.max(authz[r.module]||0, Date.parse(r.expires_at));
+      if(r.status === 'pendiente') pend.push(r.module);
+    });
+    const bar = document.getElementById('authzBar'), parts = [];
+    Object.keys(authz).forEach(m=>parts.push('<b>'+MOD_NAME[m]+'</b> autorizado hasta '+new Date(authz[m]).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})));
+    pend.forEach(m=>parts.push('Solicitud pendiente: <b>'+MOD_NAME[m]+'</b>'));
+    bar.innerHTML = parts.join(' · '); bar.style.display = parts.length ? 'block' : 'none';
+  }
+  async function askAuthz(mod){
+    const reason = prompt('Para modificar o eliminar en ' + (MOD_NAME[mod]||mod) + ' necesitas la autorización del administrador.\n\nEscribe el motivo y se le enviará la solicitud:');
+    if(!reason || !reason.trim()) return;
+    const { error } = await sb.rpc('request_change', { p_module: mod, p_reason: reason.trim() });
+    showToast(error ? (error.message || 'No se pudo enviar la solicitud.') : 'Solicitud enviada al administrador.');
+    refreshAuthz();
+  }
+  // el supervisor sin autorización no puede editar/eliminar: se le ofrece pedirla
+  document.addEventListener('click', function(e){
+    if(!me || me.role !== 'supervisor') return;
+    const b = e.target.closest('[data-del],[data-edit],[data-delsale],[data-delexp],[data-delped],[data-delimp]');
+    if(!b) return;
+    const sec = b.closest('section.view'), mod = sec ? sec.id.replace('view-','') : null;
+    if(mod && !canEdit(mod)){ e.stopPropagation(); e.preventDefault(); askAuthz(mod); }
+  }, true);
+  setInterval(()=>{ if(me && me.role === 'supervisor') refreshAuthz(); }, 60000);
+
+  // cierre automático por inactividad (15 min)
+  let idleT;
+  function bumpIdle(){
+    clearTimeout(idleT);
+    if(me) idleT = setTimeout(()=>{ document.getElementById('btnLogout').click(); setTimeout(()=>showLoginError('Sesión cerrada por inactividad.'), 900); }, 15*60*1000);
+  }
+  ['click','keydown','mousemove','touchstart'].forEach(ev=>document.addEventListener(ev, bumpIdle, {passive:true}));
+
+  function applyAccess(){
+    MODULES.forEach(m => document.body.classList.toggle('ro-' + m, !canInsert(m)));
+    const allowed = {
+      dashboard: me.role === 'admin' || (canView('ventas') && canView('insumos')),
+      inventario: canView('inventario'), pedidos: canView('pedidos'),
+      ventas: canView('ventas'), insumos: canView('insumos'), importaciones: canView('importaciones'), seguridad: me.role === 'admin'
+    };
+    let first = null;
+    document.querySelectorAll('nav.sidenav button').forEach(btn=>{
+      const ok = !!allowed[btn.dataset.view];
+      btn.style.display = ok ? '' : 'none';
+      if(ok && !first) first = btn;
+    });
+    if(first) first.click();
+  }
+  async function startSession(fresh){
+    me = await loadProfile();
+    if(fresh) await sb.rpc('log_login');
+    if(!me || !me.active || !(me.role === 'admin' || MODULES.some(canView))){
+      await sb.auth.signOut();
+      me = null; denyMsg = DENIED_MSG;
+      return false;
+    }
+    if(!(await mfaGate())){
+      await sb.auth.signOut();
+      me = null; denyMsg = 'No se completó la verificación en dos pasos.';
+      return false;
+    }
+    loginScreen.style.display = 'none';
+    appEl.style.display = 'block';
+    await refreshAuthz();
+    applyAccess();
+    await bootApp();
+    bumpIdle();
+    document.getElementById('saleAdvisor').value = me.full_name || '';
+    showToast('Bienvenido, ' + (me.full_name || me.email));
+    return true;
+  }
+  function showLoginError(msg){
+    const err = document.getElementById('loginError');
+    err.textContent = msg; err.style.display = 'block';
+  }
+
+  async function checkSession(){
+    try{
+      const { data: { session } } = await sb.auth.getSession();
+      if(session){
+        const ok = await startSession();
+        if(!ok) showLoginError(denyMsg);
+      }
+    }catch(e){ console.warn('No se pudo restaurar la sesión', e); }
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const pass = document.getElementById('loginPass').value;
+    const err = document.getElementById('loginError');
+    err.style.display = 'none';
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if(error){
+      sb.rpc('log_failed_login', { p_email: email }).then(()=>{}, ()=>{});
+      err.textContent = 'Correo o contraseña incorrectos.';
+      err.style.display = 'block';
+      return;
+    }
+    const ok = await startSession(true);
+    if(!ok) showLoginError(denyMsg);
+  });
+
+  document.getElementById('btnLogout').addEventListener('click', async function(){
+    await sb.auth.signOut();
+    appEl.style.display = 'none';
+    loginScreen.style.display = 'flex';
+    document.getElementById('loginForm').reset();
+    booted = false;
+    me = null; authz = {}; clearTimeout(idleT);
+    document.getElementById('authzBar').style.display = 'none';
+    MODULES.forEach(m => document.body.classList.remove('ro-' + m));
+  });
+
+  /* ===================== CHANGE PASSWORD ===================== */
+  const passModal = document.getElementById('passModalOverlay');
+  document.getElementById('btnChangePass').addEventListener('click', ()=>{
+    document.getElementById('passModalError').style.display = 'none';
+    document.getElementById('changePassForm').reset();
+    passModal.classList.add('active');
+  });
+  document.getElementById('passModalCancel').addEventListener('click', ()=> passModal.classList.remove('active'));
+  document.getElementById('changePassForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const cur = document.getElementById('curPass').value;
+    const next = document.getElementById('newPass').value;
+    const errEl = document.getElementById('passModalError');
+    const { data: { user } } = await sb.auth.getUser();
+    if(!user){ errEl.textContent = 'Sesión no válida.'; errEl.style.display = 'block'; return; }
+    const { error: reauthErr } = await sb.auth.signInWithPassword({ email: user.email, password: cur });
+    if(reauthErr){
+      errEl.textContent = 'La contraseña actual no es correcta.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const { error } = await sb.auth.updateUser({ password: next });
+    if(error){
+      errEl.textContent = 'No se pudo actualizar la contraseña.';
+      errEl.style.display = 'block';
+      return;
+    }
+    passModal.classList.remove('active');
+    showToast('Contraseña actualizada.');
+  });
+
+  /* ===================== NAV ===================== */
+  document.querySelectorAll('nav.sidenav button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('nav.sidenav button').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('view-' + btn.dataset.view).classList.add('active');
+    });
+  });
+
+  /* ===================== IMAGE RESIZE ===================== */
+  function resizeImage(file){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = function(ev){
+        const img = new Image();
+        img.onload = function(){
+          const maxDim = 320;
+          let w = img.width, h = img.height;
+          if(w > h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
+          else if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.72));
+        };
+        img.onerror = reject;
+        img.src = ev.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ===================== PRODUCT FORM ===================== */
+  let currentPhotoData = '';
+  const photoPreview = document.getElementById('photoPreview');
+  document.getElementById('prodPhoto').addEventListener('change', async function(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    try{
+      currentPhotoData = await resizeImage(file);
+      photoPreview.innerHTML = '<img src="'+currentPhotoData+'" alt="preview">';
+    }catch(err){ showToast('No se pudo procesar la imagen.'); }
+  });
+
+  function calcCostoUSD(mxn, tasa, exportCost){
+    mxn = Number(mxn)||0; tasa = Number(tasa)||1; exportCost = Number(exportCost)||0;
+    if(tasa <= 0) tasa = 1;
+    return (mxn * 1.05 / tasa) + exportCost;
+  }
+
+  function refreshProductCalc(){
+    const mxn = document.getElementById('prodMXN').value;
+    const tasa = document.getElementById('prodTasa').value;
+    const exp = document.getElementById('prodExport').value;
+    const venta = document.getElementById('prodVenta').value;
+    const costo = calcCostoUSD(mxn, tasa, exp);
+    document.getElementById('calcCostoUSD').textContent = fmtUSD(costo);
+    const margen = (Number(venta)||0) - costo;
+    const margenEl = document.getElementById('calcMargen');
+    margenEl.textContent = fmtUSD(margen);
+    margenEl.style.color = margen < 0 ? 'var(--danger)' : 'var(--wine)';
+  }
+  ['prodMXN','prodTasa','prodExport','prodVenta'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', refreshProductCalc);
+  });
+
+  const productForm = document.getElementById('productForm');
+  const prodCancelBtn = document.getElementById('prodCancelEdit');
+
+  function resetProductForm(){
+    productForm.reset();
+    document.getElementById('prodId').value = '';
+    document.getElementById('prodTasa').value = '18.00';
+    document.getElementById('prodExport').value = '5.00';
+    currentPhotoData = '';
+    photoPreview.innerHTML = '&#128247;';
+    document.getElementById('prodFormTitle').textContent = 'Nueva cartera';
+    document.getElementById('prodSubmitBtn').textContent = 'Guardar producto';
+    prodCancelBtn.style.display = 'none';
+    refreshProductCalc();
+  }
+  prodCancelBtn.addEventListener('click', resetProductForm);
+
+  productForm.addEventListener('submit', async function(e){
+    e.preventDefault();
+    const id = document.getElementById('prodId').value;
+    const mxn = Number(document.getElementById('prodMXN').value);
+    const tasa = Number(document.getElementById('prodTasa').value);
+    const exp = Number(document.getElementById('prodExport').value);
+    const venta = Number(document.getElementById('prodVenta').value);
+    const costoUSD = calcCostoUSD(mxn, tasa, exp);
+    const existing = id ? products.find(p=>p.id === id) : null;
+    const photo = currentPhotoData || (existing ? existing.photo : '');
+
+    const product = {
+      id: id || null, photo,
+      name: document.getElementById('prodName').value.trim(),
+      desc: document.getElementById('prodDesc').value.trim(),
+      precioMXN: mxn, tasa, exportCost: exp, costoUSD, ventaUSD: venta,
+      stock: Number(document.getElementById('prodStock').value)
+    };
+
+    let error;
+    if(existing){
+      ({ error } = await sb.from('products').update(productToRow(product)).eq('id', existing.id));
+    } else {
+      ({ error } = await sb.from('products').insert(productToRow(product)));
+    }
+    if(error){ console.error(error); showToast('No se pudo guardar el producto.'); return; }
+
+    showToast(existing ? 'Producto actualizado.' : 'Producto agregado al inventario.');
+    await refreshAllData();
+    resetProductForm();
+    renderAll();
+  });
+
+  function editProduct(id){
+    const p = products.find(x=>x.id === id);
+    if(!p) return;
+    document.getElementById('prodId').value = p.id;
+    document.getElementById('prodName').value = p.name;
+    document.getElementById('prodDesc').value = p.desc || '';
+    document.getElementById('prodMXN').value = p.precioMXN;
+    document.getElementById('prodTasa').value = p.tasa;
+    document.getElementById('prodExport').value = p.exportCost;
+    document.getElementById('prodVenta').value = p.ventaUSD;
+    document.getElementById('prodStock').value = p.stock;
+    currentPhotoData = p.photo || '';
+    photoPreview.innerHTML = p.photo ? '<img src="'+p.photo+'" alt="preview">' : '&#128247;';
+    document.getElementById('prodFormTitle').textContent = 'Editar cartera';
+    document.getElementById('prodSubmitBtn').textContent = 'Actualizar producto';
+    prodCancelBtn.style.display = 'inline-flex';
+    refreshProductCalc();
+    document.getElementById('view-inventario').scrollIntoView({behavior:'smooth'});
+  }
+
+  async function deleteProduct(id){
+    if(!confirm('¿Eliminar este producto del inventario?')) return;
+    const { error } = await sb.from('products').delete().eq('id', id);
+    if(error){ console.error(error); showToast('No se pudo eliminar (puede tener ventas o pedidos asociados).'); return; }
+    await refreshAllData();
+    renderAll();
+    showToast('Producto eliminado.');
+  }
+
+  function renderInventory(){
+    const tbody = document.querySelector('#tblInventario tbody');
+    tbody.innerHTML = '';
+    document.getElementById('emptyInventario').style.display = products.length ? 'none' : 'block';
+    products.forEach(p=>{
+      const margen = p.ventaUSD - p.costoUSD;
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td data-label="Foto">' + (p.photo ? '<img class="prod-thumb" src="'+p.photo+'">' : '<div class="prod-thumb placeholder">&#128092;</div>') + '</td>' +
+        '<td data-label="Producto"><strong>'+escapeHtml(p.name)+'</strong></td>' +
+        '<td data-label="Costo MXN">'+fmtMXN(p.precioMXN)+'</td>' +
+        '<td data-label="Costo total USD">'+fmtUSD(p.costoUSD)+'</td>' +
+        '<td data-label="Precio venta USD">'+fmtUSD(p.ventaUSD)+'</td>' +
+        '<td data-label="Margen"><span class="'+(margen>=0?'pos':'neg')+'">'+fmtUSD(margen)+'</span></td>' +
+        '<td data-label="Stock">'+p.stock+'</td>' +
+        '<td data-label=""><div class="row-actions"><button class="link-btn" data-edit="'+p.id+'">Editar</button><button class="link-btn danger" data-del="'+p.id+'">Eliminar</button></div></td>';
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=>editProduct(b.dataset.edit)));
+    tbody.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>deleteProduct(b.dataset.del)));
+  }
+
+  /* ===================== PEDIDOS ===================== */
+  const pedidoForm = document.getElementById('pedidoForm');
+  const pedidoProductSel = document.getElementById('pedidoProduct');
+  const pedidoNewNameWrap = document.getElementById('pedidoNewNameWrap');
+  const pedidoDeliveryChk = document.getElementById('pedidoDelivery');
+  const pedidoDeliveryCostWrap = document.getElementById('pedidoDeliveryCostWrap');
+
+  function nextPedidoNumber(){
+    if(!pedidos.length) return 1;
+    return Math.max(...pedidos.map(p=>p.number)) + 1;
+  }
+  function refreshPedidoBadge(){
+    document.getElementById('pedidoNumberBadge').textContent = 'Pedido #' + nextPedidoNumber() + ' (estimado)';
+  }
+
+  function renderPedidoProductOptions(){
+    const cur = pedidoProductSel.value;
+    pedidoProductSel.innerHTML = '<option value="__new__">+ Producto nuevo</option>' +
+      products.map(p=> '<option value="'+p.id+'">'+escapeHtml(p.name)+' (stock actual: '+p.stock+')</option>').join('');
+    if(cur && (cur === '__new__' || products.some(p=>p.id === cur))) pedidoProductSel.value = cur;
+    togglePedidoNewName();
+  }
+
+  function togglePedidoNewName(){
+    const isNew = pedidoProductSel.value === '__new__';
+    pedidoNewNameWrap.classList.toggle('hidden-field', !isNew);
+    document.getElementById('pedidoNewName').required = isNew;
+    if(!isNew){
+      const p = products.find(x=>x.id === pedidoProductSel.value);
+      if(p){
+        document.getElementById('pedidoMXN').value = p.precioMXN;
+        document.getElementById('pedidoTasa').value = p.tasa;
+        document.getElementById('pedidoExport').value = p.exportCost;
+        document.getElementById('pedidoVenta').value = p.ventaUSD;
+      }
+    }
+    refreshPedidoCalc();
+  }
+  pedidoProductSel.addEventListener('change', togglePedidoNewName);
+
+  pedidoDeliveryChk.addEventListener('change', function(){
+    pedidoDeliveryCostWrap.classList.toggle('hidden-field', !pedidoDeliveryChk.checked);
+    document.getElementById('pedidoDeliveryCost').required = pedidoDeliveryChk.checked;
+    if(!pedidoDeliveryChk.checked) document.getElementById('pedidoDeliveryCost').value = '';
+    refreshPedidoCalc();
+  });
+
+  function refreshPedidoCalc(){
+    const mxn = document.getElementById('pedidoMXN').value;
+    const tasa = document.getElementById('pedidoTasa').value;
+    const exp = document.getElementById('pedidoExport').value;
+    const qty = Number(document.getElementById('pedidoQty').value)||0;
+    const deliveryCost = pedidoDeliveryChk.checked ? (Number(document.getElementById('pedidoDeliveryCost').value)||0) : 0;
+    const unit = calcCostoUSD(mxn, tasa, exp);
+    document.getElementById('pedidoCalcUnit').textContent = fmtUSD(unit);
+    const total = (unit * qty) + deliveryCost;
+    document.getElementById('pedidoCalcTotal').textContent = fmtUSD(total);
+  }
+  ['pedidoMXN','pedidoTasa','pedidoExport','pedidoQty','pedidoDeliveryCost'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', refreshPedidoCalc);
+  });
+
+  function resetPedidoForm(){
+    pedidoForm.reset();
+    document.getElementById('pedidoTasa').value = '18.00';
+    document.getElementById('pedidoExport').value = '5.00';
+    document.getElementById('pedidoDate').value = todayLocal();
+    pedidoDeliveryCostWrap.classList.add('hidden-field');
+    document.getElementById('pedidoDeliveryCost').required = false;
+    pedidoProductSel.value = '__new__';
+    togglePedidoNewName();
+    refreshPedidoBadge();
+  }
+
+  pedidoForm.addEventListener('submit', async function(e){
+    e.preventDefault();
+    const isNew = pedidoProductSel.value === '__new__';
+    const mxn = Number(document.getElementById('pedidoMXN').value);
+    const tasa = Number(document.getElementById('pedidoTasa').value);
+    const exp = Number(document.getElementById('pedidoExport').value);
+    const venta = Number(document.getElementById('pedidoVenta').value);
+    const qty = Number(document.getElementById('pedidoQty').value);
+    const delivery = pedidoDeliveryChk.checked;
+    const deliveryCost = delivery ? (Number(document.getElementById('pedidoDeliveryCost').value)||0) : 0;
+    const costoUnitario = calcCostoUSD(mxn, tasa, exp);
+    const costoTotalPedido = (costoUnitario * qty) + deliveryCost;
+
+    let productId, productName;
+    if(isNew){
+      const name = document.getElementById('pedidoNewName').value.trim();
+      if(!name){ showToast('Escribe el nombre del producto nuevo.'); return; }
+      const newProduct = { photo:'', name, desc:'', precioMXN: mxn, tasa, exportCost: exp, costoUSD: costoUnitario, ventaUSD: venta, stock: qty };
+      const { data, error } = await sb.from('products').insert(productToRow(newProduct)).select().single();
+      if(error){ console.error(error); showToast('No se pudo crear el producto.'); return; }
+      productId = data.id; productName = name;
+    } else {
+      const product = products.find(p=>p.id === pedidoProductSel.value);
+      if(!product){ showToast('Selecciona un producto válido.'); return; }
+      const updated = { ...product, stock: product.stock + qty, precioMXN: mxn, tasa, exportCost: exp, costoUSD: costoUnitario, ventaUSD: venta };
+      const { error } = await sb.from('products').update(productToRow(updated)).eq('id', product.id);
+      if(error){ console.error(error); showToast('No se pudo actualizar el producto.'); return; }
+      productId = product.id; productName = product.name;
+    }
+
+    const pedido = { date: document.getElementById('pedidoDate').value, productId, productName, qty, costoUnitario, costoTotalPedido, ventaUSD: venta, delivery, deliveryCost };
+    const { error: pedError } = await sb.from('pedidos').insert(pedidoToRow(pedido));
+    if(pedError){ console.error(pedError); showToast('No se pudo registrar el pedido.'); return; }
+
+    await refreshAllData();
+    resetPedidoForm();
+    renderAll();
+    showToast('Pedido registrado y sumado al inventario.');
+  });
+
+  async function deletePedido(id){
+    if(!confirm('¿Eliminar este pedido? La cantidad recibida se restará del stock del producto.')) return;
+    const ped = pedidos.find(x=>x.id === id);
+    if(ped && ped.productId){
+      const p = products.find(x=>x.id === ped.productId);
+      if(p){
+        const updated = { ...p, stock: Math.max(0, p.stock - ped.qty) };
+        await sb.from('products').update(productToRow(updated)).eq('id', p.id);
+      }
+    }
+    const { error } = await sb.from('pedidos').delete().eq('id', id);
+    if(error){ console.error(error); showToast('No se pudo eliminar el pedido.'); return; }
+    await refreshAllData();
+    renderAll();
+    showToast('Pedido eliminado.');
+  }
+
+  function renderPedidos(){
+    const tbody = document.querySelector('#tblPedidos tbody');
+    tbody.innerHTML = '';
+    document.getElementById('emptyPedidos').style.display = pedidos.length ? 'none' : 'block';
+    pedidos.forEach(p=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td data-label="#">'+p.number+'</td>' +
+        '<td data-label="Fecha">'+p.date+'</td>' +
+        '<td data-label="Producto">'+escapeHtml(p.productName)+'</td>' +
+        '<td data-label="Cant.">'+p.qty+'</td>' +
+        '<td data-label="Costo unit. USD">'+fmtUSD(p.costoUnitario)+'</td>' +
+        '<td data-label="Costo total">'+fmtUSD(p.costoTotalPedido)+'</td>' +
+        '<td data-label="Delivery">'+(p.delivery ? '<span class="delivery-tag">Sí · '+fmtUSD(p.deliveryCost)+'</span>' : '<span class="delivery-tag no">No</span>')+'</td>' +
+        '<td data-label="Venta USD">'+fmtUSD(p.ventaUSD)+'</td>' +
+        '<td data-label=""><button class="link-btn danger" data-delped="'+p.id+'">Eliminar</button></td>';
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('[data-delped]').forEach(b=> b.addEventListener('click', ()=>deletePedido(b.dataset.delped)));
+  }
+
+  /* ===================== SALES ===================== */
+  const saleForm = document.getElementById('saleForm');
+  const saleProductSel = document.getElementById('saleProduct');
+  const saleQtyInput = document.getElementById('saleQty');
+
+  function renderSaleProductOptions(){
+    const cur = saleProductSel.value;
+    saleProductSel.innerHTML = '<option value="">Selecciona un producto</option>' +
+      products.map(p=> '<option value="'+p.id+'">'+escapeHtml(p.name)+' (stock: '+p.stock+')</option>').join('');
+    if(products.some(p=>p.id === cur)) saleProductSel.value = cur;
+    refreshSaleCalc();
+  }
+
+  function refreshSaleCalc(){
+    const p = products.find(x=>x.id === saleProductSel.value);
+    const qty = Number(saleQtyInput.value)||0;
+    const total = p ? p.ventaUSD * qty : 0;
+    document.getElementById('calcSaleTotal').textContent = fmtUSD(total);
+
+    const cuotas = salePayType.value === 'cuotas';
+    document.getElementById('saleAbonoField').style.display = cuotas ? '' : 'none';
+    const plan = document.getElementById('calcSalePlan');
+    const abono = Number(saleAbono.value) || 0;
+    if(cuotas && total > 0 && abono > 0 && abono < total){
+      const rest = total - abono, c1 = Math.round(rest/2*100)/100, c2 = Math.round((rest-c1)*100)/100;
+      const d = document.getElementById('saleDate').value || todayLocal();
+      plan.style.display = '';
+      plan.innerHTML = 'Abono hoy <b>'+fmtUSD(abono)+'</b> · Cuota 1 <b>'+fmtUSD(c1)+'</b> ('+addDays(d,15)+') · Cuota 2 <b>'+fmtUSD(c2)+'</b> ('+addDays(d,30)+')';
+    } else { plan.style.display = 'none'; }
+  }
+  function addDays(iso, n){
+    const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  const salePayType = document.getElementById('salePayType');
+  const saleAbono = document.getElementById('saleAbono');
+  saleProductSel.addEventListener('change', refreshSaleCalc);
+  saleQtyInput.addEventListener('input', refreshSaleCalc);
+  salePayType.addEventListener('change', refreshSaleCalc);
+  saleAbono.addEventListener('input', refreshSaleCalc);
+  document.getElementById('saleDate').addEventListener('change', refreshSaleCalc);
+
+  saleForm.addEventListener('submit', async function(e){
+    e.preventDefault();
+    const p = products.find(x=>x.id === saleProductSel.value);
+    if(!p){ showToast('Selecciona un producto.'); return; }
+    const qty = Number(saleQtyInput.value);
+    if(qty < 1){ showToast('La cantidad debe ser al menos 1.'); return; }
+    if(qty > p.stock){ showToast('No hay suficiente stock disponible.'); return; }
+
+    const { error: saleErr } = await sb.rpc('register_sale', {
+      p_product: p.id, p_qty: qty,
+      p_client: document.getElementById('saleClient').value.trim(),
+      p_date: document.getElementById('saleDate').value || todayLocal(),
+      p_phone: document.getElementById('salePhone').value.trim(),
+      p_advisor: document.getElementById('saleAdvisor').value.trim(),
+      p_payment_type: salePayType.value,
+      p_abono: salePayType.value === 'cuotas' ? Number(saleAbono.value) : null
+    });
+    if(saleErr){ console.error(saleErr); showToast(saleErr.message || 'No se pudo registrar la venta.'); return; }
+
+    await refreshAllData();
+    saleForm.reset();
+    document.getElementById('saleDate').value = todayLocal();
+    document.getElementById('saleAdvisor').value = (me && me.full_name) || '';
+    renderAll();
+    showToast('Venta registrada.');
+  });
+
+  async function deleteSale(id){
+    if(!confirm('¿Eliminar esta venta? El stock del producto se restituirá.')) return;
+    const { error } = await sb.rpc('delete_sale', { p_sale: id });
+    if(error){ console.error(error); showToast(error.message || 'No se pudo eliminar la venta.'); return; }
+    await refreshAllData();
+    renderAll();
+    showToast('Venta eliminada.');
+  }
+
+  function renderSales(){
+    const tbody = document.querySelector('#tblVentas tbody');
+    tbody.innerHTML = '';
+    document.getElementById('emptyVentas').style.display = sales.length ? 'none' : 'block';
+    sales.forEach(s=>{
+      const tr = document.createElement('tr');
+      const pays = salePayments.filter(x=>x.saleId === s.id);
+      const paid = pays.filter(x=>x.paid).reduce((a,x)=>a+x.amount, 0);
+      const next = pays.find(x=>!x.paid);
+      const payHtml = !next ? '<span class="pos">Pagado</span>' :
+        'Saldo '+fmtUSD(s.totalUSD - paid)+'<br><small>Cuota '+next.number+': '+fmtUSD(next.amount)+' · vence '+next.due+
+        (next.due < todayLocal() ? ' <b class="neg">(vencida)</b>' : '')+'</small> <button class="link-btn" data-pay="'+next.id+'">Cobrar</button>';
+      tr.innerHTML =
+        '<td data-label="Fecha">'+s.date+'</td>' +
+        '<td data-label="Producto">'+escapeHtml(s.productName)+'</td>' +
+        '<td data-label="Cliente">'+escapeHtml(s.client)+
+          (s.phone ? '<br><small>'+escapeHtml(s.phone)+'</small>' : '')+
+          (s.advisor ? '<br><small>Asesor: '+escapeHtml(s.advisor)+'</small>' : '')+'</td>' +
+        '<td data-label="Cant.">'+s.qty+'</td>' +
+        '<td data-label="Total USD">'+fmtUSD(s.totalUSD)+'</td>' +
+        '<td data-label="Ganancia USD"><span class="'+(s.profitUSD>=0?'pos':'neg')+'">'+fmtUSD(s.profitUSD)+'</span></td>' +
+        '<td data-label="Pago">'+payHtml+'</td>' +
+        '<td data-label=""><button class="link-btn danger" data-delsale="'+s.id+'">Eliminar</button></td>';
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('[data-delsale]').forEach(b=> b.addEventListener('click', ()=>deleteSale(b.dataset.delsale)));
+    tbody.querySelectorAll('[data-pay]').forEach(b=> b.addEventListener('click', async ()=>{
+      if(!confirm('¿Registrar este pago como cobrado hoy?')) return;
+      const { error } = await sb.rpc('mark_payment', { p_payment: b.dataset.pay, p_paid: true, p_paid_date: todayLocal() });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
+      await refreshAllData(); renderAll(); showToast('Pago registrado.');
+    }));
+  }
+
+  /* ===================== EXPENSES ===================== */
+  const expenseForm = document.getElementById('expenseForm');
+  expenseForm.addEventListener('submit', async function(e){
+    e.preventDefault();
+    const expense = { desc: document.getElementById('expDesc').value.trim(), date: document.getElementById('expDate').value, amountUSD: Number(document.getElementById('expAmount').value) };
+    const { error } = await sb.from('expenses').insert(expenseToRow(expense));
+    if(error){ console.error(error); showToast('No se pudo registrar el gasto.'); return; }
+    await refreshAllData();
+    expenseForm.reset();
+    document.getElementById('expDate').value = todayLocal();
+    renderAll();
+    showToast('Gasto registrado.');
+  });
+
+  async function deleteExpense(id){
+    if(!confirm('¿Eliminar este gasto?')) return;
+    const { error } = await sb.from('expenses').delete().eq('id', id);
+    if(error){ console.error(error); showToast('No se pudo eliminar el gasto.'); return; }
+    await refreshAllData();
+    renderAll();
+    showToast('Gasto eliminado.');
+  }
+
+  function renderExpenses(){
+    const tbody = document.querySelector('#tblGastos tbody');
+    tbody.innerHTML = '';
+    document.getElementById('emptyGastos').style.display = expenses.length ? 'none' : 'block';
+    expenses.forEach(g=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td data-label="Fecha">'+g.date+'</td>' +
+        '<td data-label="Descripción">'+escapeHtml(g.desc)+'</td>' +
+        '<td data-label="Monto USD">'+fmtUSD(g.amountUSD)+'</td>' +
+        '<td data-label=""><button class="link-btn danger" data-delexp="'+g.id+'">Eliminar</button></td>';
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('[data-delexp]').forEach(b=> b.addEventListener('click', ()=>deleteExpense(b.dataset.delexp)));
+  }
+
+  /* ===================== DASHBOARD ===================== */
+  function renderDashboard(){
+    const ingresos = sales.reduce((sum,s)=> sum + s.totalUSD, 0);
+    const cogs = sales.reduce((sum,s)=> sum + s.costoUnitario * s.qty, 0);
+    const gastos = expenses.reduce((sum,g)=> sum + g.amountUSD, 0);
+    const costos = cogs + gastos;
+    const ganancia = ingresos - costos;
+    const stockTotal = products.reduce((sum,p)=> sum + (Number(p.stock)||0), 0);
+
+    document.getElementById('statIngresos').textContent = fmtUSD(ingresos);
+    document.getElementById('statCostos').textContent = fmtUSD(costos);
+    document.getElementById('statGanancia').textContent = fmtUSD(ganancia);
+    document.getElementById('statStock').textContent = stockTotal;
+    document.getElementById('cardGanancia').classList.toggle('neg', ganancia < 0);
+
+    const tbody = document.querySelector('#tblRecentSales tbody');
+    tbody.innerHTML = '';
+    const recent = sales.slice(0,5);
+    document.getElementById('emptyRecentSales').style.display = recent.length ? 'none' : 'block';
+    recent.forEach(s=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td data-label="Fecha">'+s.date+'</td>' +
+        '<td data-label="Producto">'+escapeHtml(s.productName)+'</td>' +
+        '<td data-label="Cliente">'+escapeHtml(s.client)+'</td>' +
+        '<td data-label="Cant.">'+s.qty+'</td>' +
+        '<td data-label="Total">'+fmtUSD(s.totalUSD)+'</td>' +
+        '<td data-label="Ganancia"><span class="'+(s.profitUSD>=0?'pos':'neg')+'">'+fmtUSD(s.profitUSD)+'</span></td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  /* ===================== BOOT ===================== */
+  let booted = false;
+  async function bootApp(){
+    document.getElementById('saleDate').value = todayLocal();
+    document.getElementById('expDate').value = todayLocal();
+    await refreshAllData();
+    refreshProductCalc();
+    resetPedidoForm();
+    renderAll();
+    booted = true;
+  }
+
+  checkSession();
+})();
+
+</script>
+</body>
+</html>
