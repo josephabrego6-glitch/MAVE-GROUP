@@ -886,7 +886,17 @@
   document.getElementById('impAddItem').addEventListener('click', ()=>{ impF.items.push({pid:'',name:'',qty:1,price:0,venta:0}); renderImpRows(); });
   document.getElementById('impAddCost').addEventListener('click', ()=>{ impF.costs.push({kind:'bodega',desc:'',amount:0,cur:'',rate:0}); renderImpRows(); });
 
+  // evita guardar dos veces si se pulsa dos veces o Enter + clic (duplicaba productos)
+  let impSaving = false;
   async function saveImport(receive){
+    if(impSaving) return;
+    impSaving = true;
+    const btns = Array.from(impForm.querySelectorAll('button'));
+    btns.forEach(b=>{ b.disabled = true; });
+    try{ await saveImportCore(receive); }
+    finally{ impSaving = false; btns.forEach(b=>{ b.disabled = false; }); }
+  }
+  async function saveImportCore(receive){
     const h = readImpHeader();
     if(!h.cur){ showToast('Elige una moneda de la lista.'); return; }
     if(!(h.rate > 0)){ showToast('Indica la tasa de cambio.'); return; }
@@ -1080,6 +1090,16 @@
   });
   document.querySelector('nav.sidenav [data-view="seguridad"]').addEventListener('click', secReload);
   setInterval(async ()=>{ if(me && me.role === 'admin'){ await fetchSecurity(); updateSecBadge(true); } }, 60000);
+
+  // bloqueo de doble envío en los demás formularios (producto, venta, gasto, pedido)
+  ['productForm','saleForm','expenseForm','pedidoForm'].forEach(id=>{
+    const f = document.getElementById(id);
+    if(!f) return;
+    f.addEventListener('submit', function(e){
+      if(f.dataset.busy){ e.preventDefault(); e.stopImmediatePropagation(); return; }
+      f.dataset.busy = '1'; setTimeout(()=>{ delete f.dataset.busy; }, 1500);
+    }, true);
+  });
 
   /* ===================== LOGIN (Supabase Auth) ===================== */
   const loginScreen = document.getElementById('loginScreen');
