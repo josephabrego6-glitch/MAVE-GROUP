@@ -350,6 +350,10 @@
 
         <div class="panel">
           <h2>Tabla de inventario</h2>
+          <div class="field" style="margin:12px 0 16px;">
+            <label for="inventorySearch">Buscar en inventario</label>
+            <input type="search" id="inventorySearch" placeholder="Buscar por nombre de cartera..." autocomplete="off">
+          </div>
           <div style="overflow-x:auto;">
           <table id="tblInventario">
             <thead><tr><th>Foto</th><th>Producto</th><th>Costo MXN</th><th>Costo total USD</th><th>Precio venta USD</th><th>Margen</th><th>Stock</th><th></th></tr></thead>
@@ -535,6 +539,7 @@
                 <select id="impAlloc"><option value="valor">Según el valor del producto</option><option value="unidad">Igual por unidad</option></select></div>
             </div>
             <datalist id="currencyList"></datalist>
+    <datalist id="impProductCatalog"></datalist>
             <h3 style="margin:18px 0 6px;">Productos</h3>
             <div style="overflow-x:auto;"><table id="impItemsTbl">
               <thead><tr><th>Producto</th><th>Nombre (si es nuevo)</th><th>Cant.</th><th>Precio unit.</th><th>Venta USD</th><th></th></tr></thead><tbody></tbody></table></div>
@@ -819,11 +824,33 @@
     document.getElementById('impDate').value = todayLocal();
     renderImpRows(); refreshImpPreview();
   }
+  function supplierCatalogNames(supplier){
+    const s = String(supplier || '').trim().toLowerCase();
+    if(!s) return [];
+    const names = [];
+    imports.forEach(im=>{
+      if(String(im.supplier || '').trim().toLowerCase() !== s) return;
+      impItems.filter(x=>x.import_id === im.id).forEach(x=>{
+        const name = String(x.product_name || '').trim();
+        if(name && !names.some(n=>n.toLowerCase() === name.toLowerCase())) names.push(name);
+      });
+    });
+    return names.sort((a,b)=>a.localeCompare(b,'es'));
+  }
+
+  function refreshImpProductCatalog(){
+    const list = document.getElementById('impProductCatalog');
+    if(!list) return;
+    list.innerHTML = supplierCatalogNames(document.getElementById('impSupplier').value)
+      .map(n=>'<option value="'+escapeHtml(n)+'"></option>').join('');
+  }
+
   function renderImpRows(){
+    refreshImpProductCatalog();
     document.querySelector('#impItemsTbl tbody').innerHTML = impF.items.map((r,i)=>
       '<tr data-i="'+i+'"><td><select data-k="pid"><option value="">Producto nuevo</option>'+
       products.map(p=>'<option value="'+p.id+'"'+(p.id===r.pid?' selected':'')+'>'+escapeHtml(p.name)+'</option>').join('')+'</select></td>'+
-      '<td><input data-k="name" type="text" value="'+escapeHtml(r.name)+'"'+(r.pid?' disabled':'')+'></td>'+
+      '<td><input data-k="name" list="impProductCatalog" type="text" value="'+escapeHtml(r.name)+'"'+(r.pid?' disabled':'')+' placeholder="Ej. Coco negra"></td>'+
       '<td><input data-k="qty" type="number" min="1" step="1" value="'+r.qty+'" style="width:80px"></td>'+
       '<td><input data-k="price" type="number" min="0" step="any" value="'+r.price+'" style="width:110px"></td>'+
       '<td><input data-k="venta" type="number" min="0" step="any" value="'+r.venta+'" style="width:100px"></td>'+
@@ -849,6 +876,7 @@
 
   const impForm = document.getElementById('impForm');
   impForm.addEventListener('input', function(e){
+    if(e.target.id === 'impSupplier'){ refreshImpProductCatalog(); return; }
     const k = e.target.dataset.k, tr = e.target.closest('tr');
     if(k && tr){
       const list = tr.closest('#impCostsTbl') ? impF.costs : impF.items, row = list[Number(tr.dataset.i)];
@@ -1455,11 +1483,20 @@
     showToast('Producto eliminado.');
   }
 
+  let inventorySearchTerm = '';
+
   function renderInventory(){
     const tbody = document.querySelector('#tblInventario tbody');
     tbody.innerHTML = '';
-    document.getElementById('emptyInventario').style.display = products.length ? 'none' : 'block';
-    products.forEach(p=>{
+    const term = inventorySearchTerm.trim().toLowerCase();
+    const visibleProducts = term
+      ? products.filter(p => String(p.name || '').toLowerCase().includes(term))
+      : products;
+    document.getElementById('emptyInventario').style.display = visibleProducts.length ? 'none' : 'block';
+    document.getElementById('emptyInventario').textContent = products.length
+      ? 'No se encontraron carteras con esa búsqueda.'
+      : 'Aún no hay carteras registradas. Agrega la primera arriba.';
+    visibleProducts.forEach(p=>{
       const margen = p.ventaUSD - p.costoUSD;
       const tr = document.createElement('tr');
       tr.innerHTML =
@@ -1475,6 +1512,14 @@
     });
     tbody.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=>editProduct(b.dataset.edit)));
     tbody.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>deleteProduct(b.dataset.del)));
+  }
+
+  const inventorySearch = document.getElementById('inventorySearch');
+  if(inventorySearch){
+    inventorySearch.addEventListener('input', function(){
+      inventorySearchTerm = this.value;
+      renderInventory();
+    });
   }
 
   /* ===================== PEDIDOS ===================== */
