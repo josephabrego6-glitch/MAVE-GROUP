@@ -824,25 +824,36 @@
     document.getElementById('impDate').value = todayLocal();
     renderImpRows(); refreshImpPreview();
   }
-  function supplierCatalogNames(supplier){
-    const s = String(supplier || '').trim().toLowerCase();
+  // compara sin mayúsculas, sin tildes y sin espacios repetidos
+  function normText(s){
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  }
+  // Nombres usados con este proveedor en importaciones YA RECIBIDAS (no borradores),
+  // con la fecha y el precio de la última vez que se compró cada uno.
+  function supplierCatalog(supplier){
+    const s = normText(supplier);
     if(!s) return [];
-    const names = [];
+    const found = {};
     imports.forEach(im=>{
-      if(String(im.supplier || '').trim().toLowerCase() !== s) return;
+      if(im.status !== 'recibida' || normText(im.supplier) !== s) return;
       impItems.filter(x=>x.import_id === im.id).forEach(x=>{
         const name = String(x.product_name || '').trim();
-        if(name && !names.some(n=>n.toLowerCase() === name.toLowerCase())) names.push(name);
+        if(!name) return;
+        const key = normText(name);
+        const prev = found[key];
+        if(!prev || String(im.date) > String(prev.date) || (String(im.date) === String(prev.date) && im.number > prev.number)){
+          found[key] = { name:name, date:im.date, price:Number(x.unit_price)||0, currency:im.currency };
+        }
       });
     });
-    return names.sort((a,b)=>a.localeCompare(b,'es'));
+    return Object.values(found).sort((a,b)=>a.name.localeCompare(b.name,'es'));
   }
 
   function refreshImpProductCatalog(){
     const list = document.getElementById('impProductCatalog');
     if(!list) return;
-    list.innerHTML = supplierCatalogNames(document.getElementById('impSupplier').value)
-      .map(n=>'<option value="'+escapeHtml(n)+'"></option>').join('');
+    list.innerHTML = supplierCatalog(document.getElementById('impSupplier').value).map(e=>
+      '<option value="'+escapeHtml(e.name)+'" label="'+escapeHtml(e.name+' · última vez '+e.date+' · '+e.price+' '+e.currency)+'"></option>').join('');
   }
 
   function renderImpRows(){
