@@ -771,6 +771,7 @@
   /* ===================== IMPORTACIONES ===================== */
   let currencies = [], imports = [], impItems = [], impCosts = [];
   let impF = { items: [], costs: [] };
+  let impEditId = null;
   const COST_LABEL = { bodega:'Bodega', proveedor:'Cargo fijo del proveedor', envio:'Envío', otro:'Otro' };
   const PAY_LABEL = { contado:'Contado', ach:'ACH', paypal:'PayPal', tarjeta:'Tarjeta' };
   const rateCache = {};
@@ -815,7 +816,10 @@
       taxIncl:v('impTaxIncl') === '1', comm:Number(v('impComm'))||0, alloc:v('impAlloc') };
   }
   function resetImpForm(){
+    impEditId = null;
     impF = { items:[{pid:'',name:'',qty:1,price:0,venta:0}], costs:[] };
+    document.querySelector('#view-importaciones h2').textContent = 'Nueva importación';
+    document.getElementById('impSaveDraft').textContent = 'Guardar borrador';
     document.getElementById('impForm').reset();
     document.getElementById('impDate').value = todayLocal();
     renderImpRows(); refreshImpPreview();
@@ -897,21 +901,39 @@
     const costs = impF.costs.filter(c=>Number(c.amount) > 0);
     for(const c of costs){ if(!parseCur(c.cur) || !(Number(c.rate) > 0)){ showToast('Cada costo adicional necesita moneda y tasa.'); return; } }
 
-    const { data: imp, error } = await sb.from('imports').insert({
+    let imp, error;
+    const payload = {
       date:h.date || todayLocal(), supplier:h.supplier || null, origin_country:h.country || null, currency:h.cur, rate_per_usd:h.rate,
       commission_pct:h.comm, tax_pct:h.taxPct, tax_included:h.taxIncl, allocation:h.alloc, payment_method:h.pay
-    }).select().single();
+    };
+
+    if(impEditId){
+      const res = await sb.from('imports').update(payload).eq('id', impEditId).eq('status','borrador').select().single();
+      imp = res.data; error = res.error;
+      if(!error && !imp){ error = { message:'El borrador ya no está disponible para editar.' }; }
+    } else {
+      const res = await sb.from('imports').insert(payload).select().single();
+      imp = res.data; error = res.error;
+    }
     if(error){ console.error(error); showToast(error.message || 'No se pudo guardar la importación.'); return; }
+
+    if(impEditId){
+      const d1 = await sb.from('import_items').delete().eq('import_id', imp.id);
+      const d2 = await sb.from('import_costs').delete().eq('import_id', imp.id);
+      if(d1.error || d2.error){ console.error(d1.error || d2.error); showToast('No se pudo actualizar el detalle del borrador.'); return; }
+    }
+
     const e1 = await sb.from('import_items').insert(items.map(r=>({ import_id:imp.id, product_id:r.pid || null,
       product_name:(r.pid ? (products.find(p=>p.id===r.pid)||{}).name : r.name.trim()), qty:Number(r.qty), unit_price:Number(r.price)||0, venta_usd:Number(r.venta)||0 })));
     const e2 = costs.length ? await sb.from('import_costs').insert(costs.map(c=>({ import_id:imp.id, kind:c.kind, description:c.desc || null,
       amount:Number(c.amount), currency:parseCur(c.cur), rate_per_usd:Number(c.rate) }))) : {};
-    if(e1.error || e2.error){ console.error(e1.error || e2.error); await sb.from('imports').delete().eq('id', imp.id); showToast('No se pudo guardar los productos o costos.'); return; }
+    if(e1.error || e2.error){ console.error(e1.error || e2.error); showToast('No se pudo guardar los productos o costos.'); return; }
+
     if(receive){
       const { error: re } = await sb.rpc('receive_import', { p_import: imp.id });
       if(re){ console.error(re); showToast(re.message || 'Se guardó como borrador, pero no se pudo recibir.'); }
-      else showToast('Importación recibida: inventario actualizado.');
-    } else showToast('Borrador guardado.');
+      else showToast(impEditId ? 'Borrador actualizado y recibido: inventario actualizado.' : 'Importación recibida: inventario actualizado.');
+    } else showToast(impEditId ? 'Borrador actualizado.' : 'Borrador guardado.');
     await refreshAllData(); resetImpForm(); renderAll();
   }
   impForm.addEventListener('submit', e=>{ e.preventDefault(); saveImport(true); });
@@ -932,8 +954,36 @@
         '<td data-label="Moneda">'+im.currency+' <small>('+Number(im.rate_per_usd)+')</small></td><td data-label="Pago">'+(PAY_LABEL[im.payment_method]||'')+'</td>'+
         '<td data-label="Prod.">'+its.length+'</td><td data-label="Total USD">'+fmtUSD(total)+'</td>'+
         '<td data-label="Estado">'+(im.status === 'recibida' ? '<span class="pos">Recibida</span>' : 'Borrador')+'</td>'+
-        '<td data-label="">'+(im.status === 'borrador' ? '<button class="link-btn" data-recv="'+im.id+'">Recibir</button> <button class="link-btn danger" data-delimp="'+im.id+'">Eliminar</button>' : '')+'</td></tr>';
+        '<td data-label="">'+(im.status === 'borrador' ? '<button class="link-btn" data-editimp="'+im.id+'">Editar</button> <button class="link-btn" data-recv="'+im.id+'">Recibir</button> <button class="link-btn danger" data-delimp="'+im.id+'">Eliminar</button>' : '')+'</td></tr>';
     }).join('');
+    tbody.querySelectorAll('[data-editimp]').forEach(b=>b.addEventListener('click', async ()=>{
+      const id = b.dataset.editimp;
+      const im = imports.find(x=>x.id === id);
+      if(!im || im.status !== 'borrador') return;
+      const its = impItems.filter(x=>x.import_id === id);
+      const cs = impCosts.filter(x=>x.import_id === id);
+      impEditId = id;
+      document.getElementById('impDate').value = im.date || todayLocal();
+      document.getElementById('impSupplier').value = im.supplier || '';
+      document.getElementById('impCountry').value = im.origin_country || '';
+      document.getElementById('impPay').value = im.payment_method || 'contado';
+      document.getElementById('impCurrency').value = im.currency || '';
+      document.getElementById('impRate').value = Number(im.rate_per_usd) || '';
+      document.getElementById('impTaxPct').value = Number(im.tax_pct) || 0;
+      document.getElementById('impTaxIncl').value = im.tax_included ? '1' : '0';
+      document.getElementById('impComm').value = Number(im.commission_pct) || 0;
+      document.getElementById('impAlloc').value = im.allocation || 'valor';
+      impF = {
+        items: its.map(x=>({pid:x.product_id || '', name:x.product_id ? '' : (x.product_name || ''), qty:Number(x.qty)||1, price:Number(x.unit_price)||0, venta:Number(x.venta_usd)||0})),
+        costs: cs.map(x=>({kind:x.kind || 'bodega', desc:x.description || '', amount:Number(x.amount)||0, cur:x.currency || '', rate:Number(x.rate_per_usd)||0}))
+      };
+      if(!impF.items.length) impF.items = [{pid:'',name:'',qty:1,price:0,venta:0}];
+      document.querySelector('#view-importaciones h2').textContent = 'Editar borrador #'+im.number;
+      document.getElementById('impSaveDraft').textContent = 'Actualizar borrador';
+      renderImpRows(); refreshImpPreview();
+      document.getElementById('view-importaciones').scrollIntoView({behavior:'smooth'});
+      showToast('Borrador cargado para editar.');
+    }));
     tbody.querySelectorAll('[data-recv]').forEach(b=>b.addEventListener('click', async ()=>{
       if(!confirm('¿Recibir esta importación? Se sumará al inventario y ya no podrá editarse.')) return;
       const { error } = await sb.rpc('receive_import', { p_import: b.dataset.recv });
@@ -1099,10 +1149,20 @@
     if(error){ console.error(error); showToast(error.message || 'No se pudo iniciar la verificación en dos pasos.'); return false; }
     const intro = '<h2 style="margin-top:0;">Activa la verificación en dos pasos</h2>' +
       '<p style="font-size:14px;">1. Instala <b>Google Authenticator</b>, <b>Microsoft Authenticator</b> o <b>Authy</b> en tu teléfono.<br>2. Escanea este código QR:</p>' +
-      '<div style="text-align:center;"><img alt="Código QR" src="' + data.totp.qr_code + '" style="width:190px;height:190px;"></div>' +
-      '<p style="font-size:13px;word-break:break-all;">¿No puedes escanearlo? Clave manual:<br><code>' + escapeHtml(data.totp.secret) + '</code></p>' +
+      '<div style="text-align:center;"><img id="mfaQr" alt="Código QR" style="width:190px;height:190px;"></div>' +
+      '<p style="font-size:13px;word-break:break-all;">¿Estás en el teléfono o no puedes escanearlo? Usa la clave manual:<br><code id="mfaSecret" style="user-select:all;">' + escapeHtml(data.totp.secret) + '</code></p>' +
+      '<p style="font-size:13px;"><button type="button" class="link-btn" id="mfaCopy">Copiar clave</button> · <a id="mfaOpen" style="color:#4A1229;text-decoration:underline;">Abrir en mi app autenticadora</a></p>' +
       '<p style="font-size:14px;">3. Escribe el código de 6 dígitos que aparece en la app:</p>';
-    return mfaAsk(data.id, intro, 'Cancelar y salir');
+    const pending = mfaAsk(data.id, intro, 'Cancelar y salir');
+    // el QR llega como SVG con comillas: se asigna por DOM y codificado, no dentro del HTML
+    const svg = String(data.totp.qr_code || '');
+    document.getElementById('mfaQr').src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.startsWith('data:') ? svg.slice(svg.indexOf(',') + 1) : svg);
+    document.getElementById('mfaOpen').href = data.totp.uri || '#';
+    document.getElementById('mfaCopy').addEventListener('click', async ()=>{
+      try{ await navigator.clipboard.writeText(data.totp.secret); showToast('Clave copiada.'); }
+      catch(e){ const r = document.createRange(); r.selectNodeContents(document.getElementById('mfaSecret')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); showToast('Mantén pulsada la clave y copia.'); }
+    });
+    return pending;
   }
   async function mfaGate(){
     const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
