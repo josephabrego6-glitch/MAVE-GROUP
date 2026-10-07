@@ -464,6 +464,10 @@
                 <input type="number" id="saleQty" min="1" step="1" value="1" required>
               </div>
               <div class="field">
+                <label for="saleUnitPrice">Precio unitario (USD)</label>
+                <input type="number" id="saleUnitPrice" min="0" step="0.01" placeholder="Precio del catálogo">
+              </div>
+              <div class="field">
                 <label for="saleClient">Cliente</label>
                 <input type="text" id="saleClient" required placeholder="Nombre del cliente">
               </div>
@@ -484,14 +488,22 @@
                 <select id="salePayType">
                   <option value="total">Pago total</option>
                   <option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>
+                  <option value="personalizado">Otros montos (yo defino cada pago)</option>
                 </select>
               </div>
               <div class="field" id="saleAbonoField" style="display:none;">
                 <label for="saleAbono">Abono inicial (USD)</label>
                 <input type="number" id="saleAbono" min="0" step="0.01" placeholder="0.00">
               </div>
+              <div class="field span2" id="saleCustomField" style="display:none;">
+                <label>Pagos (monto, fecha y si ya se cobró)</label>
+                <div id="saleCustomRows"></div>
+                <button type="button" class="btn btn-ghost" id="saleAddPay" style="width:auto;margin-top:8px;">+ Agregar pago</button>
+                <div class="calc-line" id="saleCustomSum" style="margin-top:8px;"></div>
+              </div>
               <div class="field span2">
                 <div class="calc-line" style="margin-top:26px;">Total a cobrar: <b id="calcSaleTotal">$0.00</b></div>
+                <div class="calc-line">Costo: <b id="calcSaleCost">$0.00</b> · Ganancia: <b id="calcSaleProfit">$0.00</b> · Margen: <b id="calcSaleMargin">0.0%</b></div>
                 <div class="calc-line" id="calcSalePlan" style="display:none;"></div>
               </div>
             </div>
@@ -503,9 +515,10 @@
 
         <div class="panel">
           <h2>Historial de ventas</h2>
+          <div class="calc-line" id="salesSummary" style="margin-bottom:10px;"></div>
           <div style="overflow-x:auto;">
           <table id="tblVentas">
-            <thead><tr><th>Fecha</th><th>Producto</th><th>Cliente</th><th>Cant.</th><th>Total USD</th><th>Ganancia USD</th><th>Pago</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Producto</th><th>Cliente</th><th>Cant.</th><th>Total USD</th><th>Ganancia USD</th><th>Margen</th><th>Pago</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
           </div>
@@ -1689,6 +1702,7 @@
   const saleForm = document.getElementById('saleForm');
   const saleProductSel = document.getElementById('saleProduct');
   const saleQtyInput = document.getElementById('saleQty');
+  const saleUnitPriceInput = document.getElementById('saleUnitPrice');
 
   function renderSaleProductOptions(){
     const cur = saleProductSel.value;
@@ -1698,14 +1712,71 @@
     refreshSaleCalc();
   }
 
-  function refreshSaleCalc(){
+  let customRows = [];
+  function salePrice(p){
+    const v = saleUnitPriceInput.value;
+    return (v !== '' && !isNaN(Number(v))) ? Number(v) : (p ? p.ventaUSD : 0);
+  }
+  function syncSalePrice(){
+    const p = products.find(x=>x.id === saleProductSel.value);
+    saleUnitPriceInput.value = p ? p.ventaUSD : '';
+  }
+  function saleTotalNow(){
+    const p = products.find(x=>x.id === saleProductSel.value);
+    return p ? salePrice(p) * (Number(saleQtyInput.value)||0) : 0;
+  }
+  function renderCustomRows(){
+    const box = document.getElementById('saleCustomRows');
+    box.innerHTML = '';
+    customRows.forEach((r,i)=>{
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;';
+      row.innerHTML =
+        '<input type="number" min="0" step="0.01" value="'+r.amount+'" placeholder="Monto USD" data-cr="amount" style="width:130px;">' +
+        '<input type="date" value="'+r.due+'" data-cr="due" style="width:160px;">' +
+        '<label style="display:flex;gap:4px;align-items:center;font-size:13px;margin:0;"><input type="checkbox" data-cr="paid" '+(r.paid?'checked':'')+' style="width:auto;"> Cobrado</label>' +
+        '<button type="button" class="link-btn danger" data-crdel="'+i+'">Quitar</button>';
+      row.querySelectorAll('[data-cr]').forEach(inp=> inp.addEventListener('input', ()=>{
+        const k = inp.dataset.cr;
+        r[k] = k==='paid' ? inp.checked : inp.value;
+        refreshSaleCalc(true);
+      }));
+      row.querySelector('[data-crdel]').addEventListener('click', ()=>{ customRows.splice(i,1); renderCustomRows(); refreshSaleCalc(true); });
+      box.appendChild(row);
+    });
+  }
+  function addCustomRow(){
+    const total = saleTotalNow();
+    const used = customRows.reduce((a,r)=>a+(Number(r.amount)||0),0);
+    const left = Math.max(0, Math.round((total-used)*100)/100);
+    customRows.push({ amount: left || '', due: document.getElementById('saleDate').value || todayLocal(), paid: customRows.length === 0 });
+    renderCustomRows();
+    refreshSaleCalc(true);
+  }
+
+  function refreshSaleCalc(keepRows){
     const p = products.find(x=>x.id === saleProductSel.value);
     const qty = Number(saleQtyInput.value)||0;
-    const total = p ? p.ventaUSD * qty : 0;
+    const price = salePrice(p);
+    const total = p ? price * qty : 0;
     document.getElementById('calcSaleTotal').textContent = fmtUSD(total);
 
-    const cuotas = salePayType.value === 'cuotas';
+    const cost = p ? p.costoUSD * qty : 0;
+    const profit = total - cost;
+    const margin = total > 0 ? (profit/total*100) : 0;
+    document.getElementById('calcSaleCost').textContent = fmtUSD(cost);
+    const pe = document.getElementById('calcSaleProfit');
+    pe.textContent = fmtUSD(profit); pe.style.color = profit < 0 ? 'var(--danger)' : 'var(--good)';
+    const me2 = document.getElementById('calcSaleMargin');
+    me2.textContent = margin.toFixed(1) + '%'; me2.style.color = profit < 0 ? 'var(--danger)' : 'var(--good)';
+
+    const type = salePayType.value;
+    const cuotas = type === 'cuotas';
+    const custom = type === 'personalizado';
     document.getElementById('saleAbonoField').style.display = cuotas ? '' : 'none';
+    document.getElementById('saleCustomField').style.display = custom ? '' : 'none';
+    if(custom && !customRows.length && keepRows !== true){ addCustomRow(); }
+
     const plan = document.getElementById('calcSalePlan');
     const abono = Number(saleAbono.value) || 0;
     if(cuotas && total > 0 && abono > 0 && abono < total){
@@ -1714,6 +1785,15 @@
       plan.style.display = '';
       plan.innerHTML = 'Abono hoy <b>'+fmtUSD(abono)+'</b> · Cuota 1 <b>'+fmtUSD(c1)+'</b> ('+addDays(d,15)+') · Cuota 2 <b>'+fmtUSD(c2)+'</b> ('+addDays(d,30)+')';
     } else { plan.style.display = 'none'; }
+
+    if(custom){
+      const sum = customRows.reduce((a,r)=>a+(Number(r.amount)||0),0);
+      const diff = Math.round((total-sum)*100)/100;
+      const el = document.getElementById('saleCustomSum');
+      el.innerHTML = 'Suman <b>'+fmtUSD(sum)+'</b> de <b>'+fmtUSD(total)+'</b> · ' +
+        (Math.abs(diff) <= 0.01 ? '<span class="pos">Completo</span>' :
+         (diff > 0 ? '<span class="neg">Faltan '+fmtUSD(diff)+'</span>' : '<span class="neg">Sobran '+fmtUSD(-diff)+'</span>'));
+    }
   }
   function addDays(iso, n){
     const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n);
@@ -1721,11 +1801,13 @@
   }
   const salePayType = document.getElementById('salePayType');
   const saleAbono = document.getElementById('saleAbono');
-  saleProductSel.addEventListener('change', refreshSaleCalc);
-  saleQtyInput.addEventListener('input', refreshSaleCalc);
-  salePayType.addEventListener('change', refreshSaleCalc);
-  saleAbono.addEventListener('input', refreshSaleCalc);
-  document.getElementById('saleDate').addEventListener('change', refreshSaleCalc);
+  saleProductSel.addEventListener('change', ()=>{ syncSalePrice(); customRows = []; renderCustomRows(); refreshSaleCalc(); });
+  saleQtyInput.addEventListener('input', ()=>refreshSaleCalc(true));
+  saleUnitPriceInput.addEventListener('input', ()=>refreshSaleCalc(true));
+  salePayType.addEventListener('change', ()=> refreshSaleCalc());
+  saleAbono.addEventListener('input', ()=>refreshSaleCalc());
+  document.getElementById('saleAddPay').addEventListener('click', addCustomRow);
+  document.getElementById('saleDate').addEventListener('change', ()=>refreshSaleCalc(true));
 
   saleForm.addEventListener('submit', async function(e){
     e.preventDefault();
@@ -1735,8 +1817,22 @@
     if(qty < 1){ showToast('La cantidad debe ser al menos 1.'); return; }
     if(qty > p.stock){ showToast('No hay suficiente stock disponible.'); return; }
 
+    const unit = salePrice(p);
+    if(!(unit >= 0)){ showToast('El precio unitario no es válido.'); return; }
+    const total = unit * qty;
+    let schedule = null;
+    if(salePayType.value === 'personalizado'){
+      if(!customRows.length){ showToast('Agrega al menos un pago.'); return; }
+      const sum = customRows.reduce((a,r)=>a+(Number(r.amount)||0),0);
+      if(customRows.some(r=>!(Number(r.amount)>0))){ showToast('Cada pago debe ser mayor que 0.'); return; }
+      if(Math.abs(sum-total) > 0.01){ showToast('Los pagos suman '+fmtUSD(sum)+' y el total es '+fmtUSD(total)+'.'); return; }
+      schedule = customRows.map(r=>({ amount: Number(r.amount), due: r.due || todayLocal(), paid: !!r.paid }));
+    }
+
     const { error: saleErr } = await sb.rpc('register_sale', {
       p_product: p.id, p_qty: qty,
+      p_unit_price: Math.abs(unit - p.ventaUSD) > 0.0001 ? unit : null,
+      p_schedule: schedule,
       p_client: document.getElementById('saleClient').value.trim(),
       p_date: document.getElementById('saleDate').value || todayLocal(),
       p_phone: document.getElementById('salePhone').value.trim(),
@@ -1748,6 +1844,7 @@
 
     await refreshAllData();
     saleForm.reset();
+    customRows = []; renderCustomRows(); syncSalePrice();
     document.getElementById('saleDate').value = todayLocal();
     document.getElementById('saleAdvisor').value = (me && me.full_name) || '';
     renderAll();
@@ -1767,13 +1864,16 @@
     const tbody = document.querySelector('#tblVentas tbody');
     tbody.innerHTML = '';
     document.getElementById('emptyVentas').style.display = sales.length ? 'none' : 'block';
+    const tv = sales.reduce((a,x)=>a+x.totalUSD,0), tp = sales.reduce((a,x)=>a+x.profitUSD,0);
+    document.getElementById('salesSummary').innerHTML = sales.length ?
+      'Vendido <b>'+fmtUSD(tv)+'</b> · Ganancia <b class="'+(tp>=0?'pos':'neg')+'">'+fmtUSD(tp)+'</b> · Margen <b>'+(tv>0?(tp/tv*100).toFixed(1):'0.0')+'%</b>' : '';
     sales.forEach(s=>{
       const tr = document.createElement('tr');
       const pays = salePayments.filter(x=>x.saleId === s.id);
       const paid = pays.filter(x=>x.paid).reduce((a,x)=>a+x.amount, 0);
       const next = pays.find(x=>!x.paid);
       const payHtml = !next ? '<span class="pos">Pagado</span>' :
-        'Saldo '+fmtUSD(s.totalUSD - paid)+'<br><small>Cuota '+next.number+': '+fmtUSD(next.amount)+' · vence '+next.due+
+        'Saldo '+fmtUSD(s.totalUSD - paid)+'<br><small>'+(next.number === 0 ? 'Abono' : 'Cuota '+next.number)+': '+fmtUSD(next.amount)+' · vence '+next.due+
         (next.due < todayLocal() ? ' <b class="neg">(vencida)</b>' : '')+'</small> <button class="link-btn" data-pay="'+next.id+'">Cobrar</button>';
       tr.innerHTML =
         '<td data-label="Fecha">'+s.date+'</td>' +
@@ -1784,6 +1884,7 @@
         '<td data-label="Cant.">'+s.qty+'</td>' +
         '<td data-label="Total USD">'+fmtUSD(s.totalUSD)+'</td>' +
         '<td data-label="Ganancia USD"><span class="'+(s.profitUSD>=0?'pos':'neg')+'">'+fmtUSD(s.profitUSD)+'</span></td>' +
+        '<td data-label="Margen"><span class="'+(s.profitUSD>=0?'pos':'neg')+'">'+(s.totalUSD>0?(s.profitUSD/s.totalUSD*100).toFixed(1):'0.0')+'%</span></td>' +
         '<td data-label="Pago">'+payHtml+'</td>' +
         '<td data-label=""><button class="link-btn danger" data-delsale="'+s.id+'">Eliminar</button></td>';
       tbody.appendChild(tr);
