@@ -228,6 +228,7 @@
         <label for="loginPass">Contraseña</label>
         <input type="password" id="loginPass" required autocomplete="current-password">
       </div>
+      <div class="field" id="captchaField"></div>
       <button type="submit" class="btn btn-primary">Ingresar</button>
     </form>
     <p class="login-hint">Acceso exclusivo para el equipo de MAVE. Si no tienes cuenta, pídele a la administración que te dé de alta.</p>
@@ -235,9 +236,6 @@
 </div>
 
 <!-- ================= APP ================= -->
-<div id="mfaBox" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.65);align-items:center;justify-content:center;">
-  <div id="mfaCard" style="background:#fff;color:#222;padding:26px;border-radius:12px;max-width:400px;width:92%;max-height:92vh;overflow:auto;"></div>
-</div>
 <div id="app">
   <div class="topbar">
     <div class="brand">
@@ -565,9 +563,6 @@
           <h1>Seguridad</h1>
           <p>Alertas, autorizaciones, usuarios y accesos. Solo visible para el administrador.</p>
         </div>
-        <div class="panel"><h2>Verificación en dos pasos</h2>
-          <p>Activada en tu cuenta ✓ — se pide un código de tu app autenticadora al iniciar sesión, y la base de datos rechaza las sesiones que no la completaron.</p>
-          <p class="empty" style="display:block;">Es obligatoria para administrador y supervisor. Si alguien pierde su teléfono, avísame y le restablezco la verificación.</p></div>
         <div class="panel"><h2>Alertas</h2>
           <button class="link-btn" id="secReadAll">Marcar todas como leídas</button>
           <div style="overflow-x:auto;"><table id="tblAlerts"><thead><tr><th>Fecha</th><th>Nivel</th><th>Tipo</th><th>Alerta</th><th></th></tr></thead><tbody></tbody></table></div>
@@ -1109,73 +1104,7 @@
     if(me.role === 'admin') return true;
     return me.role === 'supervisor' && !!authz[mod] && authz[mod] > Date.now();
   }
-  /* ===================== VERIFICACIÓN EN DOS PASOS ===================== */
   let denyMsg = DENIED_MSG;
-  function mfaShow(html){ const b = document.getElementById('mfaBox'); document.getElementById('mfaCard').innerHTML = html; b.style.display = 'flex'; }
-  function mfaHide(){ document.getElementById('mfaBox').style.display = 'none'; }
-  function mfaAsk(factorId, intro, onCancelText){
-    return new Promise(resolve=>{
-      const card = document.getElementById('mfaCard');
-      const wire = () => {
-        const code = document.getElementById('mfaCode'), err = document.getElementById('mfaErr');
-        code.focus();
-        const go = async () => {
-          const v = code.value.replace(/\s/g, '');
-          if(!/^\d{6}$/.test(v)){ err.textContent = 'Escribe los 6 dígitos.'; return; }
-          document.getElementById('mfaOk').disabled = true;
-          const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code: v });
-          if(error){ err.textContent = 'Código incorrecto o vencido. Inténtalo de nuevo.'; document.getElementById('mfaOk').disabled = false; code.value = ''; code.focus(); return; }
-          mfaHide(); resolve(true);
-        };
-        document.getElementById('mfaOk').addEventListener('click', go);
-        code.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); go(); } });
-        document.getElementById('mfaCancel').addEventListener('click', ()=>{ mfaHide(); resolve(false); });
-      };
-      card.innerHTML = intro + '<input id="mfaCode" type="text" inputmode="numeric" maxlength="7" autocomplete="one-time-code" placeholder="000000" style="width:100%;font-size:22px;letter-spacing:6px;text-align:center;margin:10px 0;">' +
-        '<p id="mfaErr" style="color:#b00020;min-height:20px;margin:0 0 8px;font-size:14px;"></p>' +
-        '<button type="button" class="btn btn-primary" id="mfaOk" style="width:100%;">Verificar</button> ' +
-        '<button type="button" class="link-btn" id="mfaCancel" style="margin-top:8px;">' + onCancelText + '</button>';
-      document.getElementById('mfaBox').style.display = 'flex';
-      wire();
-    });
-  }
-  async function mfaVerify(factorId){
-    return mfaAsk(factorId, '<h2 style="margin-top:0;">Verificación en dos pasos</h2><p>Escribe el código de 6 dígitos que muestra tu app autenticadora.</p>', 'Cancelar');
-  }
-  async function mfaEnroll(){
-    const { data: fl } = await sb.auth.mfa.listFactors();
-    for(const f of ((fl && fl.all) || [])) if(f.status !== 'verified') await sb.auth.mfa.unenroll({ factorId: f.id });
-    const { data, error } = await sb.auth.mfa.enroll({ factorType:'totp', friendlyName:'MAVE ' + Date.now() });
-    if(error){ console.error(error); showToast(error.message || 'No se pudo iniciar la verificación en dos pasos.'); return false; }
-    const intro = '<h2 style="margin-top:0;">Activa la verificación en dos pasos</h2>' +
-      '<p style="font-size:14px;">1. Instala <b>Google Authenticator</b>, <b>Microsoft Authenticator</b> o <b>Authy</b> en tu teléfono.<br>2. Escanea este código QR:</p>' +
-      '<div style="text-align:center;"><img id="mfaQr" alt="Código QR" style="width:190px;height:190px;"></div>' +
-      '<p style="font-size:13px;word-break:break-all;">¿Estás en el teléfono o no puedes escanearlo? Usa la clave manual:<br><code id="mfaSecret" style="user-select:all;">' + escapeHtml(data.totp.secret) + '</code></p>' +
-      '<p style="font-size:13px;"><button type="button" class="link-btn" id="mfaCopy">Copiar clave</button> · <a id="mfaOpen" style="color:#4A1229;text-decoration:underline;">Abrir en mi app autenticadora</a></p>' +
-      '<p style="font-size:14px;">3. Escribe el código de 6 dígitos que aparece en la app:</p>';
-    const pending = mfaAsk(data.id, intro, 'Cancelar y salir');
-    // el QR llega como SVG con comillas: se asigna por DOM y codificado, no dentro del HTML
-    const svg = String(data.totp.qr_code || '');
-    document.getElementById('mfaQr').src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.startsWith('data:') ? svg.slice(svg.indexOf(',') + 1) : svg);
-    document.getElementById('mfaOpen').href = data.totp.uri || '#';
-    document.getElementById('mfaCopy').addEventListener('click', async ()=>{
-      try{ await navigator.clipboard.writeText(data.totp.secret); showToast('Clave copiada.'); }
-      catch(e){ const r = document.createRange(); r.selectNodeContents(document.getElementById('mfaSecret')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); showToast('Mantén pulsada la clave y copia.'); }
-    });
-    return pending;
-  }
-  async function mfaGate(){
-    const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
-    const { data: fl } = await sb.auth.mfa.listFactors();
-    const verified = (fl && fl.totp) || [];
-    if(verified.length){
-      if(aal && aal.currentLevel === 'aal2') return true;
-      return mfaVerify(verified[0].id);
-    }
-    if(me.role === 'admin' || me.role === 'supervisor') return mfaEnroll();   // obligatoria para admin y supervisor
-    return true;
-  }
-
   async function loadProfile(){
     const { data: { user } } = await sb.auth.getUser();
     if(!user) return null;
@@ -1243,11 +1172,6 @@
       me = null; denyMsg = DENIED_MSG;
       return false;
     }
-    if(!(await mfaGate())){
-      await sb.auth.signOut();
-      me = null; denyMsg = 'No se completó la verificación en dos pasos.';
-      return false;
-    }
     loginScreen.style.display = 'none';
     appEl.style.display = 'block';
     await refreshAuthz();
@@ -1273,13 +1197,45 @@
     }catch(e){ console.warn('No se pudo restaurar la sesión', e); }
   }
 
+  /* ===================== VERIFICACIÓN ANTI-ROBOT ===================== */
+  // Clave PÚBLICA de Cloudflare Turnstile. Si está vacía se usa una pregunta simple.
+  const TURNSTILE_SITE_KEY = '';
+  let captchaToken = null, captchaAnswer = 0, tsWidget = null;
+  function newMathCaptcha(){
+    const a = 2 + Math.floor(Math.random() * 8), b = 2 + Math.floor(Math.random() * 8);
+    captchaAnswer = a + b;
+    document.getElementById('captchaField').innerHTML = '<label for="captchaInput">Verifica que no eres un robot: ¿cuánto es ' + a + ' + ' + b + '?</label>' +
+      '<input type="text" inputmode="numeric" id="captchaInput" autocomplete="off" required>';
+  }
+  function setupCaptcha(){
+    if(!TURNSTILE_SITE_KEY){ newMathCaptcha(); return; }
+    document.getElementById('captchaField').innerHTML = '<div id="tsBox"></div>';
+    const sc = document.createElement('script');
+    sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; sc.async = true;
+    sc.onload = () => { tsWidget = window.turnstile.render('#tsBox', { sitekey: TURNSTILE_SITE_KEY,
+      callback: t => { captchaToken = t; }, 'expired-callback': () => { captchaToken = null; }, 'error-callback': () => { captchaToken = null; } }); };
+    document.head.appendChild(sc);
+  }
+  function captchaOk(){
+    if(TURNSTILE_SITE_KEY) return !!captchaToken;
+    const el = document.getElementById('captchaInput');
+    return !!el && Number(el.value.trim()) === captchaAnswer;
+  }
+  function captchaReset(){
+    if(TURNSTILE_SITE_KEY){ captchaToken = null; if(window.turnstile && tsWidget !== null) window.turnstile.reset(tsWidget); }
+    else newMathCaptcha();
+  }
+  setupCaptcha();
+
   document.getElementById('loginForm').addEventListener('submit', async function(e){
     e.preventDefault();
     const email = document.getElementById('loginEmail').value.trim();
     const pass = document.getElementById('loginPass').value;
     const err = document.getElementById('loginError');
     err.style.display = 'none';
-    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if(!captchaOk()){ showLoginError('Completa la verificación anti-robot.'); captchaReset(); return; }
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass, options: TURNSTILE_SITE_KEY ? { captchaToken } : undefined });
+    captchaReset();
     if(error){
       sb.rpc('log_failed_login', { p_email: email }).then(()=>{}, ()=>{});
       err.textContent = 'Correo o contraseña incorrectos.';
@@ -1296,7 +1252,7 @@
     loginScreen.style.display = 'flex';
     document.getElementById('loginForm').reset();
     booted = false;
-    me = null; authz = {}; clearTimeout(idleT);
+    me = null; authz = {}; clearTimeout(idleT); captchaReset();
     document.getElementById('authzBar').style.display = 'none';
     MODULES.forEach(m => document.body.classList.remove('ro-' + m));
   });
