@@ -137,7 +137,6 @@
   .checkbox-row input[type="checkbox"]{ width:17px; height:17px; accent-color: var(--wine); cursor:pointer; }
   .checkbox-row label{ font-size: 13.5px; color: var(--ink); cursor:pointer; }
   .hidden-field{ display:none !important; }
-  .pedido-badge{ display:inline-block; background: var(--wine); color: var(--white); font-family:'Cormorant Garamond',serif; font-size: 15px; font-weight:600; padding: 4px 12px; border-radius: 3px; margin-bottom: 18px; }
   .delivery-tag{ font-size: 11.5px; background: var(--cream-deep); color: var(--wine); padding: 3px 8px; border-radius: 20px; }
   .delivery-tag.no{ background: transparent; color: var(--ink-soft); }
 
@@ -205,7 +204,6 @@
   }
 /* modo solo lectura por módulo */
 .ro-inventario #view-inventario .panel:has(form),.ro-inventario #view-inventario .link-btn,
-.ro-pedidos #view-pedidos .panel:has(form),.ro-pedidos #view-pedidos .link-btn,
 .ro-ventas #view-ventas .panel:has(form),.ro-ventas #view-ventas .link-btn,
 .ro-importaciones #view-importaciones .panel:has(form),.ro-importaciones #view-importaciones .link-btn,
 .ro-insumos #view-insumos .panel:has(form),.ro-insumos #view-insumos .link-btn{display:none !important}
@@ -252,7 +250,6 @@
     <nav class="sidenav">
       <button data-view="dashboard" class="active">Panel general</button>
       <button data-view="inventario">Inventario</button>
-      <button data-view="pedidos">Pedidos</button>
       <button data-view="ventas">Ventas</button>
       <button data-view="importaciones">Importaciones</button>
       <button data-view="seguridad">Seguridad <span id="secBadge"></span></button>
@@ -361,86 +358,6 @@
           </table>
           </div>
           <div class="empty-state" id="emptyInventario" style="display:none;">Aún no hay carteras registradas. Agrega la primera arriba.</div>
-        </div>
-      </section>
-
-      <!-- ---------- PEDIDOS ---------- -->
-      <section class="view" id="view-pedidos">
-        <div class="view-header">
-          <h1>Pedidos</h1>
-          <p>Registra cada compra a tu proveedor en México y súmala automáticamente al inventario.</p>
-        </div>
-
-        <div class="panel">
-          <span class="pedido-badge" id="pedidoNumberBadge">Pedido #1</span>
-          <form id="pedidoForm">
-            <div class="form-grid">
-              <div class="field span2">
-                <label for="pedidoProduct">Producto</label>
-                <select id="pedidoProduct" required>
-                  <option value="__new__">+ Producto nuevo</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="pedidoDate">Fecha</label>
-                <input type="date" id="pedidoDate" required>
-              </div>
-              <div class="field span3" id="pedidoNewNameWrap">
-                <label for="pedidoNewName">Nombre del producto nuevo</label>
-                <input type="text" id="pedidoNewName" placeholder="Ej. Cartera Sofía mini">
-              </div>
-              <div class="field">
-                <label for="pedidoQty">Cantidad recibida</label>
-                <input type="number" id="pedidoQty" min="1" step="1" required placeholder="Ej. 10">
-              </div>
-              <div class="field">
-                <label for="pedidoMXN">Precio de compra por unidad (MXN)</label>
-                <input type="number" id="pedidoMXN" min="0" step="0.01" required placeholder="0.00">
-              </div>
-              <div class="field">
-                <label for="pedidoTasa">Tasa de cambio MXN/USD</label>
-                <input type="number" id="pedidoTasa" min="0.01" step="0.01" value="18.00" required>
-              </div>
-              <div class="field">
-                <label for="pedidoExport">Costo de envío/exportación por unidad (USD)</label>
-                <input type="number" id="pedidoExport" min="0" step="0.01" value="5.00" required>
-              </div>
-              <div class="field">
-                <label for="pedidoVenta">Precio de venta al público (USD)</label>
-                <input type="number" id="pedidoVenta" min="0" step="0.01" required placeholder="0.00">
-              </div>
-              <div class="field span2">
-                <div class="calc-line">Costo unitario en USD: <b id="pedidoCalcUnit">$0.00</b></div>
-              </div>
-              <div class="field span3">
-                <div class="checkbox-row">
-                  <input type="checkbox" id="pedidoDelivery">
-                  <label for="pedidoDelivery">El cliente solicitó delivery a domicilio para este pedido</label>
-                </div>
-              </div>
-              <div class="field hidden-field" id="pedidoDeliveryCostWrap">
-                <label for="pedidoDeliveryCost">Costo de delivery (USD)</label>
-                <input type="number" id="pedidoDeliveryCost" min="0" step="0.01" placeholder="0.00">
-              </div>
-              <div class="field span3">
-                <div class="calc-line total">Costo total del pedido: <b id="pedidoCalcTotal">$0.00</b></div>
-              </div>
-            </div>
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary" style="width:auto;">Registrar pedido</button>
-            </div>
-          </form>
-        </div>
-
-        <div class="panel">
-          <h2>Historial de pedidos</h2>
-          <div style="overflow-x:auto;">
-          <table id="tblPedidos">
-            <thead><tr><th>#</th><th>Fecha</th><th>Producto</th><th>Cant.</th><th>Costo unit. USD</th><th>Costo total</th><th>Delivery</th><th>Venta USD</th><th></th></tr></thead>
-            <tbody></tbody>
-          </table>
-          </div>
-          <div class="empty-state" id="emptyPedidos" style="display:none;">Aún no hay pedidos registrados.</div>
         </div>
       </section>
 
@@ -701,7 +618,6 @@
   let sales = [];
   let salePayments = [];
   let expenses = [];
-  let pedidos = [];
 
   function todayLocal(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
   function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -737,13 +653,6 @@
   function expenseToRow(e){
     return { description:e.desc, date:e.date, amount_usd:e.amountUSD };
   }
-  function rowToPedido(r){
-    return { id:r.id, number:Number(r.number), date:r.date, productId:r.product_id, productName:r.product_name, qty:Number(r.qty), costoUnitario:Number(r.costo_unitario), costoTotalPedido:Number(r.costo_total), ventaUSD:Number(r.venta_usd), delivery:!!r.delivery, deliveryCost:Number(r.delivery_cost) };
-  }
-  function pedidoToRow(p){
-    return { date:p.date, product_id:p.productId, product_name:p.productName, qty:p.qty, costo_unitario:p.costoUnitario, costo_total:p.costoTotalPedido, venta_usd:p.ventaUSD, delivery:p.delivery, delivery_cost:p.deliveryCost };
-  }
-
   /* ===================== DATA LOADING ===================== */
   async function fetchProducts(){
     const {data, error} = await sb.from('products').select('*').order('created_at', {ascending:true});
@@ -765,20 +674,15 @@
     if(error){ console.error(error); showToast('No se pudo cargar los gastos.'); return []; }
     return data.map(rowToExpense);
   }
-  async function fetchPedidos(){
-    const {data, error} = await sb.from('pedidos').select('*').order('number', {ascending:false});
-    if(error){ console.error(error); showToast('No se pudo cargar los pedidos.'); return []; }
-    return data.map(rowToPedido);
-  }
   async function refreshAllData(){
-    [products, sales, expenses, pedidos, salePayments] = await Promise.all([fetchProducts(), fetchSales(), fetchExpenses(), fetchPedidos(), fetchSalePayments()]);
+    [products, sales, expenses, salePayments] = await Promise.all([fetchProducts(), fetchSales(), fetchExpenses(), fetchSalePayments()]);
     await fetchImportData();
     await fetchSecurity();
   }
   function renderRowsIfIdle(){ if(!document.activeElement || !impForm.contains(document.activeElement)) renderImpRows(); }
   function renderAll(){
     renderInventory(); renderSaleProductOptions(); renderSales(); renderExpenses();
-    renderPedidoProductOptions(); renderPedidos(); renderImports(); renderRowsIfIdle(); renderSecurity(); renderDashboard();
+    renderImports(); renderRowsIfIdle(); renderSecurity(); renderDashboard();
   }
 
   /* ===================== IMPORTACIONES ===================== */
@@ -1143,8 +1047,8 @@
   document.querySelector('nav.sidenav [data-view="seguridad"]').addEventListener('click', secReload);
   setInterval(async ()=>{ if(me && me.role === 'admin'){ await fetchSecurity(); updateSecBadge(true); } }, 60000);
 
-  // bloqueo de doble envío en los demás formularios (producto, venta, gasto, pedido)
-  ['productForm','saleForm','expenseForm','pedidoForm'].forEach(id=>{
+  // bloqueo de doble envío en los demás formularios (producto, venta, gasto)
+  ['productForm','saleForm','expenseForm'].forEach(id=>{
     const f = document.getElementById(id);
     if(!f) return;
     f.addEventListener('submit', function(e){
@@ -1159,14 +1063,13 @@
 
   /* ===================== PERFIL Y PERMISOS ===================== */
   let me = null, authz = {};
-  const MODULES = ['inventario','pedidos','ventas','insumos','importaciones'];
-  const MOD_NAME = { inventario:'Inventario', pedidos:'Pedidos', ventas:'Ventas', insumos:'Insumos y gastos', importaciones:'Importaciones' };
+  const MODULES = ['inventario','ventas','insumos','importaciones'];
+  const MOD_NAME = { inventario:'Inventario', ventas:'Ventas', insumos:'Insumos y gastos', importaciones:'Importaciones' };
   const DENIED_MSG = 'Tu acceso está desactivado o aún no tiene permisos. Contacta al administrador.';
-  // ver: admin o permiso distinto de "none"; Pedidos (módulo antiguo) solo admin
+  // ver: admin o permiso distinto de "none"
   function canView(mod){
     if(!me || !me.active) return false;
     if(me.role === 'admin') return true;
-    if(mod === 'pedidos') return false;
     return (me.permissions || {})[mod] !== 'none';
   }
   function canInsert(mod){ return canView(mod) && (me.role === 'admin' || me.role === 'supervisor'); }
@@ -1225,7 +1128,7 @@
     MODULES.forEach(m => document.body.classList.toggle('ro-' + m, !canInsert(m)));
     const allowed = {
       dashboard: me.role === 'admin' || (canView('ventas') && canView('insumos')),
-      inventario: canView('inventario'), pedidos: canView('pedidos'),
+      inventario: canView('inventario'),
       ventas: canView('ventas'), insumos: canView('insumos'), importaciones: canView('importaciones'), seguridad: me.role === 'admin'
     };
     let first = null;
@@ -1501,7 +1404,7 @@
   async function deleteProduct(id){
     if(!confirm('¿Eliminar este producto del inventario?')) return;
     const { error } = await sb.from('products').delete().eq('id', id);
-    if(error){ console.error(error); showToast('No se pudo eliminar (puede tener ventas o pedidos asociados).'); return; }
+    if(error){ console.error(error); showToast('No se pudo eliminar (puede tener ventas o importaciones asociadas).'); return; }
     await refreshAllData();
     renderAll();
     showToast('Producto eliminado.');
@@ -1544,158 +1447,6 @@
       inventorySearchTerm = this.value;
       renderInventory();
     });
-  }
-
-  /* ===================== PEDIDOS ===================== */
-  const pedidoForm = document.getElementById('pedidoForm');
-  const pedidoProductSel = document.getElementById('pedidoProduct');
-  const pedidoNewNameWrap = document.getElementById('pedidoNewNameWrap');
-  const pedidoDeliveryChk = document.getElementById('pedidoDelivery');
-  const pedidoDeliveryCostWrap = document.getElementById('pedidoDeliveryCostWrap');
-
-  function nextPedidoNumber(){
-    if(!pedidos.length) return 1;
-    return Math.max(...pedidos.map(p=>p.number)) + 1;
-  }
-  function refreshPedidoBadge(){
-    document.getElementById('pedidoNumberBadge').textContent = 'Pedido #' + nextPedidoNumber() + ' (estimado)';
-  }
-
-  function renderPedidoProductOptions(){
-    const cur = pedidoProductSel.value;
-    pedidoProductSel.innerHTML = '<option value="__new__">+ Producto nuevo</option>' +
-      products.map(p=> '<option value="'+p.id+'">'+escapeHtml(p.name)+' (stock actual: '+p.stock+')</option>').join('');
-    if(cur && (cur === '__new__' || products.some(p=>p.id === cur))) pedidoProductSel.value = cur;
-    togglePedidoNewName();
-  }
-
-  function togglePedidoNewName(){
-    const isNew = pedidoProductSel.value === '__new__';
-    pedidoNewNameWrap.classList.toggle('hidden-field', !isNew);
-    document.getElementById('pedidoNewName').required = isNew;
-    if(!isNew){
-      const p = products.find(x=>x.id === pedidoProductSel.value);
-      if(p){
-        document.getElementById('pedidoMXN').value = p.precioMXN;
-        document.getElementById('pedidoTasa').value = p.tasa;
-        document.getElementById('pedidoExport').value = p.exportCost;
-        document.getElementById('pedidoVenta').value = p.ventaUSD;
-      }
-    }
-    refreshPedidoCalc();
-  }
-  pedidoProductSel.addEventListener('change', togglePedidoNewName);
-
-  pedidoDeliveryChk.addEventListener('change', function(){
-    pedidoDeliveryCostWrap.classList.toggle('hidden-field', !pedidoDeliveryChk.checked);
-    document.getElementById('pedidoDeliveryCost').required = pedidoDeliveryChk.checked;
-    if(!pedidoDeliveryChk.checked) document.getElementById('pedidoDeliveryCost').value = '';
-    refreshPedidoCalc();
-  });
-
-  function refreshPedidoCalc(){
-    const mxn = document.getElementById('pedidoMXN').value;
-    const tasa = document.getElementById('pedidoTasa').value;
-    const exp = document.getElementById('pedidoExport').value;
-    const qty = Number(document.getElementById('pedidoQty').value)||0;
-    const deliveryCost = pedidoDeliveryChk.checked ? (Number(document.getElementById('pedidoDeliveryCost').value)||0) : 0;
-    const unit = calcCostoUSD(mxn, tasa, exp);
-    document.getElementById('pedidoCalcUnit').textContent = fmtUSD(unit);
-    const total = (unit * qty) + deliveryCost;
-    document.getElementById('pedidoCalcTotal').textContent = fmtUSD(total);
-  }
-  ['pedidoMXN','pedidoTasa','pedidoExport','pedidoQty','pedidoDeliveryCost'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', refreshPedidoCalc);
-  });
-
-  function resetPedidoForm(){
-    pedidoForm.reset();
-    document.getElementById('pedidoTasa').value = '18.00';
-    document.getElementById('pedidoExport').value = '5.00';
-    document.getElementById('pedidoDate').value = todayLocal();
-    pedidoDeliveryCostWrap.classList.add('hidden-field');
-    document.getElementById('pedidoDeliveryCost').required = false;
-    pedidoProductSel.value = '__new__';
-    togglePedidoNewName();
-    refreshPedidoBadge();
-  }
-
-  pedidoForm.addEventListener('submit', async function(e){
-    e.preventDefault();
-    const isNew = pedidoProductSel.value === '__new__';
-    const mxn = Number(document.getElementById('pedidoMXN').value);
-    const tasa = Number(document.getElementById('pedidoTasa').value);
-    const exp = Number(document.getElementById('pedidoExport').value);
-    const venta = Number(document.getElementById('pedidoVenta').value);
-    const qty = Number(document.getElementById('pedidoQty').value);
-    const delivery = pedidoDeliveryChk.checked;
-    const deliveryCost = delivery ? (Number(document.getElementById('pedidoDeliveryCost').value)||0) : 0;
-    const costoUnitario = calcCostoUSD(mxn, tasa, exp);
-    const costoTotalPedido = (costoUnitario * qty) + deliveryCost;
-
-    let productId, productName;
-    if(isNew){
-      const name = document.getElementById('pedidoNewName').value.trim();
-      if(!name){ showToast('Escribe el nombre del producto nuevo.'); return; }
-      const newProduct = { photo:'', name, desc:'', precioMXN: mxn, tasa, exportCost: exp, costoUSD: costoUnitario, ventaUSD: venta, stock: qty };
-      const { data, error } = await sb.from('products').insert(productToRow(newProduct)).select().single();
-      if(error){ console.error(error); showToast('No se pudo crear el producto.'); return; }
-      productId = data.id; productName = name;
-    } else {
-      const product = products.find(p=>p.id === pedidoProductSel.value);
-      if(!product){ showToast('Selecciona un producto válido.'); return; }
-      const updated = { ...product, stock: product.stock + qty, precioMXN: mxn, tasa, exportCost: exp, costoUSD: costoUnitario, ventaUSD: venta };
-      const { error } = await sb.from('products').update(productToRow(updated)).eq('id', product.id);
-      if(error){ console.error(error); showToast('No se pudo actualizar el producto.'); return; }
-      productId = product.id; productName = product.name;
-    }
-
-    const pedido = { date: document.getElementById('pedidoDate').value, productId, productName, qty, costoUnitario, costoTotalPedido, ventaUSD: venta, delivery, deliveryCost };
-    const { error: pedError } = await sb.from('pedidos').insert(pedidoToRow(pedido));
-    if(pedError){ console.error(pedError); showToast('No se pudo registrar el pedido.'); return; }
-
-    await refreshAllData();
-    resetPedidoForm();
-    renderAll();
-    showToast('Pedido registrado y sumado al inventario.');
-  });
-
-  async function deletePedido(id){
-    if(!confirm('¿Eliminar este pedido? La cantidad recibida se restará del stock del producto.')) return;
-    const ped = pedidos.find(x=>x.id === id);
-    if(ped && ped.productId){
-      const p = products.find(x=>x.id === ped.productId);
-      if(p){
-        const updated = { ...p, stock: Math.max(0, p.stock - ped.qty) };
-        await sb.from('products').update(productToRow(updated)).eq('id', p.id);
-      }
-    }
-    const { error } = await sb.from('pedidos').delete().eq('id', id);
-    if(error){ console.error(error); showToast('No se pudo eliminar el pedido.'); return; }
-    await refreshAllData();
-    renderAll();
-    showToast('Pedido eliminado.');
-  }
-
-  function renderPedidos(){
-    const tbody = document.querySelector('#tblPedidos tbody');
-    tbody.innerHTML = '';
-    document.getElementById('emptyPedidos').style.display = pedidos.length ? 'none' : 'block';
-    pedidos.forEach(p=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td data-label="#">'+p.number+'</td>' +
-        '<td data-label="Fecha">'+p.date+'</td>' +
-        '<td data-label="Producto">'+escapeHtml(p.productName)+'</td>' +
-        '<td data-label="Cant.">'+p.qty+'</td>' +
-        '<td data-label="Costo unit. USD">'+fmtUSD(p.costoUnitario)+'</td>' +
-        '<td data-label="Costo total">'+fmtUSD(p.costoTotalPedido)+'</td>' +
-        '<td data-label="Delivery">'+(p.delivery ? '<span class="delivery-tag">Sí · '+fmtUSD(p.deliveryCost)+'</span>' : '<span class="delivery-tag no">No</span>')+'</td>' +
-        '<td data-label="Venta USD">'+fmtUSD(p.ventaUSD)+'</td>' +
-        '<td data-label=""><button class="link-btn danger" data-delped="'+p.id+'">Eliminar</button></td>';
-      tbody.appendChild(tr);
-    });
-    tbody.querySelectorAll('[data-delped]').forEach(b=> b.addEventListener('click', ()=>deletePedido(b.dataset.delped)));
   }
 
   /* ===================== SALES ===================== */
@@ -1976,7 +1727,6 @@
     document.getElementById('expDate').value = todayLocal();
     await refreshAllData();
     refreshProductCalc();
-    resetPedidoForm();
     renderAll();
     booted = true;
   }
