@@ -954,7 +954,7 @@
         '<td data-label="Moneda">'+im.currency+' <small>('+Number(im.rate_per_usd)+')</small></td><td data-label="Pago">'+(PAY_LABEL[im.payment_method]||'')+'</td>'+
         '<td data-label="Prod.">'+its.length+'</td><td data-label="Total USD">'+fmtUSD(total)+'</td>'+
         '<td data-label="Estado">'+(im.status === 'recibida' ? '<span class="pos">Recibida</span>' : 'Borrador')+'</td>'+
-        '<td data-label="">'+(im.status === 'borrador' ? '<button class="link-btn" data-editimp="'+im.id+'">Editar</button> <button class="link-btn" data-recv="'+im.id+'">Recibir</button> <button class="link-btn danger" data-delimp="'+im.id+'">Eliminar</button>' : '')+'</td></tr>';
+        '<td data-label="">'+(im.status === 'borrador' ? '<button class="link-btn" data-editimp="'+im.id+'">Editar</button> <button class="link-btn" data-recv="'+im.id+'">Recibir</button> <button class="link-btn danger" data-delimp="'+im.id+'">Eliminar</button>' : (me && me.role === 'admin' ? '<button class="link-btn danger" data-reopen="'+im.id+'">Reabrir</button>' : ''))+'</td></tr>';
     }).join('');
     tbody.querySelectorAll('[data-editimp]').forEach(b=>b.addEventListener('click', async ()=>{
       const id = b.dataset.editimp;
@@ -989,6 +989,12 @@
       const { error } = await sb.rpc('receive_import', { p_import: b.dataset.recv });
       if(error){ console.error(error); showToast(error.message || 'No se pudo recibir.'); return; }
       await refreshAllData(); renderAll(); showToast('Importación recibida.');
+    }));
+    tbody.querySelectorAll('[data-reopen]').forEach(b=>b.addEventListener('click', async ()=>{
+      if(!confirm('¿Reabrir esta importación para corregirla? Se restará del inventario lo que sumó y volverá a borrador. Después podrás editarla y recibirla otra vez.')) return;
+      const { error } = await sb.rpc('reopen_import', { p_import: b.dataset.reopen });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo reabrir.'); return; }
+      await refreshAllData(); renderAll(); showToast('Importación reabierta como borrador.');
     }));
     tbody.querySelectorAll('[data-delimp]').forEach(b=>b.addEventListener('click', async ()=>{
       if(!confirm('¿Eliminar este borrador?')) return;
