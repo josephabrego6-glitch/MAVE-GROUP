@@ -468,6 +468,7 @@
           <form id="impForm">
             <div class="form-grid">
               <div class="field"><label for="impDate">Fecha</label><input type="date" id="impDate" required></div>
+              <div class="field"><label for="impPurchase">Fecha de compra (opcional)</label><input type="date" id="impPurchase"></div>
               <div class="field"><label for="impSupplier">Proveedor</label><input type="text" id="impSupplier" placeholder="Nombre del proveedor"></div>
               <div class="field"><label for="impCountry">País de origen</label><input type="text" id="impCountry" placeholder="México"></div>
               <div class="field"><label for="impPay">Método de pago</label>
@@ -484,9 +485,14 @@
             </div>
             <datalist id="currencyList"></datalist>
     <datalist id="impProductCatalog"></datalist>
+            <h3 style="margin:18px 0 6px;">Pedidos / facturas del proveedor (opcional)</h3>
+            <p class="empty" style="display:block;margin:0 0 6px;">Si el proveedor te factura por pedido, agrégalos: el descuento se reparte proporcional al precio de cada producto y el cargo por servicio (ej. 5% de Mercado Pago) se calcula sobre el subtotal. Compara el total calculado con lo que te cobraron.</p>
+            <div style="overflow-x:auto;"><table id="impOrdersTbl">
+              <thead><tr><th>Pedido #</th><th>Fecha</th><th>Descuento</th><th>Valor</th><th>Cargo %</th><th>Cargo sobre</th><th>Redondear cargo</th><th>Total de la factura</th><th>Origen de la info</th><th></th></tr></thead><tbody></tbody></table></div>
+            <button type="button" class="link-btn" id="impAddOrder">+ Agregar pedido</button>
             <h3 style="margin:18px 0 6px;">Productos</h3>
             <div style="overflow-x:auto;"><table id="impItemsTbl">
-              <thead><tr><th>Producto</th><th>Nombre (si es nuevo)</th><th>Cant.</th><th>Precio unit.</th><th>Venta USD</th><th></th></tr></thead><tbody></tbody></table></div>
+              <thead><tr><th>Producto</th><th>Nombre (si es nuevo)</th><th>Pedido</th><th>Nombre en la factura</th><th>Cant.</th><th>Recibida</th><th>Precio unit.</th><th>Venta USD</th><th>Regalo</th><th></th></tr></thead><tbody></tbody></table></div>
             <button type="button" class="link-btn" id="impAddItem">+ Agregar producto</button>
             <h3 style="margin:18px 0 6px;">Costos adicionales (bodega, cargo fijo del proveedor, envío…)</h3>
             <div style="overflow-x:auto;"><table id="impCostsTbl">
@@ -725,20 +731,24 @@
   }
 
   /* ===================== IMPORTACIONES ===================== */
-  let currencies = [], imports = [], impItems = [], impCosts = [];
-  let impF = { items: [], costs: [] };
+  let currencies = [], imports = [], impItems = [], impCosts = [], supOrders = [];
+  let impF = { items: [], costs: [], orders: [] };
+  let impUid = 0;
+  const newImpItem = ()=>({pid:'',name:'',qty:1,price:0,venta:0,ok:'',iname:'',rec:'',gift:false});
+  const newImpOrder = ()=>({key:'n'+(++impUid), ref:'', date:'', dtype:'monto', dval:0, fee:0, base:'antes_descuento', round:true, total:'', note:''});
   let impEditId = null;
   const COST_LABEL = { bodega:'Bodega', proveedor:'Cargo fijo del proveedor', envio:'Envío', otro:'Otro' };
   const PAY_LABEL = { contado:'Contado', ach:'ACH', paypal:'PayPal', tarjeta:'Tarjeta' };
   const rateCache = {};
 
   async function fetchImportData(){
-    const [c, i, it, co] = await Promise.all([
+    const [c, i, it, co, so] = await Promise.all([
       sb.from('currencies').select('*').order('code'),
       sb.from('imports').select('*').order('number', {ascending:false}),
-      sb.from('import_items').select('*'), sb.from('import_costs').select('*')
+      sb.from('import_items').select('*'), sb.from('import_costs').select('*'),
+      sb.from('supplier_orders').select('*').order('order_ref')
     ]);
-    currencies = c.data || []; imports = i.data || []; impItems = it.data || []; impCosts = co.data || [];
+    currencies = c.data || []; imports = i.data || []; impItems = it.data || []; impCosts = co.data || []; supOrders = so.data || [];
   }
   function curLabel(c){ return c.code + ' — ' + c.name + (c.countries ? ' (' + c.countries + ')' : ''); }
   function parseCur(v){
@@ -753,17 +763,33 @@
     }
     return rateCache.t[code] || null;
   }
-  // misma fórmula que la base de datos (receive_import)
-  function calcImport(h, items, costs){
+  // misma fórmula que la base de datos (compute_import_landed)
+  function calcImport(h, items, costs, orders){
+    orders = orders || [];
     const f = h.taxIncl ? 1 : 1 + h.taxPct/100;
     const units = items.reduce((a,i)=>a + i.qty, 0);
-    const totalWt = items.reduce((a,i)=>a + i.qty*i.price*f, 0);
-    const extras = costs.reduce((a,c)=>a + (c.rate > 0 ? c.amount / c.rate : 0), 0);
-    const rows = items.map(i=>{
-      const alloc = (h.alloc === 'valor' && totalWt > 0) ? extras*i.price*f/totalWt : (units ? extras/units : 0);
-      return h.rate > 0 ? i.price*(f + h.comm/100)/h.rate + alloc : 0;
+    const ot = {};
+    orders.forEach(o=>{
+      const sub = items.filter(i=>i.ok === o.key).reduce((a,i)=>a + i.qty*i.price, 0);
+      const dRaw = o.dtype === 'porcentaje' ? sub*o.dval/100 : o.dval;
+      const disc = sub > 0 ? Math.min(sub, Math.max(0, dRaw)) : 0;
+      const fraw = (o.base === 'despues_descuento' ? sub - disc : sub) * o.fee / 100;
+      const fee = o.round ? Math.round(fraw) : fraw;
+      ot[o.key] = { key:o.key, sub:sub, disc:disc, fee:fee, calc:sub - disc + fee };
     });
-    return { rows, extras, total: rows.reduce((a,u,k)=>a + u*items[k].qty, 0) };
+    const lines = items.map(i=>{
+      const t = ot[i.ok];
+      const net = (t && t.sub > 0) ? i.price*(1 - t.disc/t.sub) : i.price;
+      const feeU = (t && t.sub > 0) ? t.fee*i.price/t.sub : 0;
+      return { net:net, feeU:feeU, wt:net*f + feeU };
+    });
+    const totalWt = items.reduce((a,i,k)=>a + i.qty*lines[k].wt, 0);
+    const extras = costs.reduce((a,c)=>a + (c.rate > 0 ? c.amount / c.rate : 0), 0);
+    const rows = items.map((i,k)=>{
+      const alloc = (h.alloc === 'valor' && totalWt > 0) ? extras*lines[k].wt/totalWt : (units ? extras/units : 0);
+      return h.rate > 0 ? (lines[k].wt + i.price*h.comm/100)/h.rate + alloc : 0;
+    });
+    return { rows, extras, total: rows.reduce((a,u,k)=>a + u*items[k].qty, 0), orders: Object.values(ot) };
   }
   function readImpHeader(){
     const v = id => document.getElementById(id).value;
@@ -773,7 +799,7 @@
   }
   function resetImpForm(){
     impEditId = null;
-    impF = { items:[{pid:'',name:'',qty:1,price:0,venta:0}], costs:[] };
+    impF = { items:[newImpItem()], costs:[], orders:[] };
     document.querySelector('#view-importaciones h2').textContent = 'Nueva importación';
     document.getElementById('impSaveDraft').textContent = 'Guardar borrador';
     document.getElementById('impForm').reset();
@@ -814,13 +840,29 @@
 
   function renderImpRows(){
     refreshImpProductCatalog();
+    const ordLabel = (o,n)=>(o.ref ? '#'+o.ref : 'Pedido '+(n+1));
+    document.querySelector('#impOrdersTbl tbody').innerHTML = impF.orders.map((o,i)=>
+      '<tr data-i="'+i+'"><td><input data-k="ref" type="text" value="'+escapeHtml(o.ref)+'" style="width:90px" placeholder="90734"></td>'+
+      '<td><input data-k="date" type="date" value="'+escapeHtml(o.date)+'"></td>'+
+      '<td><select data-k="dtype"><option value="monto"'+(o.dtype==='monto'?' selected':'')+'>Monto</option><option value="porcentaje"'+(o.dtype==='porcentaje'?' selected':'')+'>%</option></select></td>'+
+      '<td><input data-k="dval" type="number" min="0" step="any" value="'+o.dval+'" style="width:90px"></td>'+
+      '<td><input data-k="fee" type="number" min="0" step="any" value="'+o.fee+'" style="width:70px"></td>'+
+      '<td><select data-k="base"><option value="antes_descuento"'+(o.base==='antes_descuento'?' selected':'')+'>Subtotal sin descuento</option><option value="despues_descuento"'+(o.base==='despues_descuento'?' selected':'')+'>Subtotal con descuento</option></select></td>'+
+      '<td><input data-k="round" type="checkbox"'+(o.round?' checked':'')+'></td>'+
+      '<td><input data-k="total" type="number" min="0" step="any" value="'+escapeHtml(o.total)+'" style="width:110px"></td>'+
+      '<td><input data-k="note" type="text" value="'+escapeHtml(o.note)+'" placeholder="Ej. correo del proveedor"></td>'+
+      '<td><button type="button" class="link-btn danger" data-rmo="'+i+'">Quitar</button></td></tr>').join('');
     document.querySelector('#impItemsTbl tbody').innerHTML = impF.items.map((r,i)=>
       '<tr data-i="'+i+'"><td><select data-k="pid"><option value="">Producto nuevo</option>'+
       products.map(p=>'<option value="'+p.id+'"'+(p.id===r.pid?' selected':'')+'>'+escapeHtml(p.name)+'</option>').join('')+'</select></td>'+
       '<td><input data-k="name" list="impProductCatalog" type="text" value="'+escapeHtml(r.name)+'"'+(r.pid?' disabled':'')+' placeholder="Ej. Coco negra"></td>'+
-      '<td><input data-k="qty" type="number" min="1" step="1" value="'+r.qty+'" style="width:80px"></td>'+
-      '<td><input data-k="price" type="number" min="0" step="any" value="'+r.price+'" style="width:110px"></td>'+
-      '<td><input data-k="venta" type="number" min="0" step="any" value="'+r.venta+'" style="width:100px"></td>'+
+      '<td><select data-k="ok"><option value="">—</option>'+impF.orders.map((o,n)=>'<option value="'+o.key+'"'+(o.key===r.ok?' selected':'')+'>'+escapeHtml(ordLabel(o,n))+'</option>').join('')+'</select></td>'+
+      '<td><input data-k="iname" type="text" value="'+escapeHtml(r.iname)+'" placeholder="Como aparece en la factura"></td>'+
+      '<td><input data-k="qty" type="number" min="1" step="1" value="'+r.qty+'" style="width:70px"></td>'+
+      '<td><input data-k="rec" type="number" min="0" step="1" value="'+escapeHtml(r.rec)+'" style="width:70px" placeholder="= cant."></td>'+
+      '<td><input data-k="price" type="number" min="0" step="any" value="'+r.price+'" style="width:100px"></td>'+
+      '<td><input data-k="venta" type="number" min="0" step="any" value="'+r.venta+'" style="width:90px"></td>'+
+      '<td><input data-k="gift" type="checkbox"'+(r.gift?' checked':'')+'></td>'+
       '<td><button type="button" class="link-btn danger" data-rm="'+i+'">Quitar</button></td></tr>').join('');
     document.querySelector('#impCostsTbl tbody').innerHTML = impF.costs.map((r,i)=>
       '<tr data-i="'+i+'"><td><select data-k="kind">'+Object.keys(COST_LABEL).map(k=>'<option value="'+k+'"'+(k===r.kind?' selected':'')+'>'+COST_LABEL[k]+'</option>').join('')+'</select></td>'+
@@ -830,15 +872,24 @@
       '<td><input data-k="rate" type="number" min="0" step="any" value="'+r.rate+'" style="width:100px"></td>'+
       '<td><button type="button" class="link-btn danger" data-rmc="'+i+'">Quitar</button></td></tr>').join('');
   }
+  function impOrdersNum(){
+    return impF.orders.map(o=>({ key:o.key, dtype:o.dtype, dval:Number(o.dval)||0, fee:Number(o.fee)||0, base:o.base, round:!!o.round }));
+  }
   function refreshImpPreview(){
     const h = readImpHeader();
     const items = impF.items.filter(r=>r.qty > 0 && (r.pid || r.name.trim()));
     const costs = impF.costs.map(c=>({ amount:Number(c.amount)||0, rate:Number(c.rate)||0 }));
     const el = document.getElementById('impPreview');
     if(!items.length || !h.rate){ el.innerHTML = 'Completa la moneda, la tasa y al menos un producto para ver el costo.'; return; }
-    const r = calcImport(h, items.map(i=>({qty:Number(i.qty), price:Number(i.price)||0})), costs);
+    const r = calcImport(h, items.map(i=>({qty:Number(i.qty), price:Number(i.price)||0, ok:i.ok})), costs, impOrdersNum());
+    const ordTxt = r.orders.map(t=>{
+      const o = impF.orders.find(x=>x.key === t.key), n = impF.orders.indexOf(o);
+      const inv = o.total === '' ? null : Number(o.total), d = inv === null ? null : Math.round((t.calc - inv)*100)/100;
+      return '<br>Pedido '+escapeHtml(o.ref ? '#'+o.ref : String(n+1))+': subtotal '+t.sub.toFixed(2)+' − descuento '+t.disc.toFixed(2)+' + cargo '+t.fee.toFixed(2)+' = <b>'+t.calc.toFixed(2)+' '+(h.cur||'')+'</b>'+
+        (d === null ? '' : (d === 0 ? ' · <span class="pos">cuadra con la factura</span>' : ' · <span class="neg">diferencia de '+d.toFixed(2)+' con la factura ('+inv.toFixed(2)+')</span>'));
+    }).join('');
     el.innerHTML = 'Costo unitario USD: ' + items.map((i,k)=>escapeHtml((i.pid ? (products.find(p=>p.id===i.pid)||{}).name : i.name) || '—')+' <b>'+fmtUSD(r.rows[k])+'</b>').join(' · ') +
-      '<br>Costos adicionales: <b>'+fmtUSD(r.extras)+'</b> · Total de la importación: <b>'+fmtUSD(r.total)+'</b>';
+      '<br>Costos adicionales: <b>'+fmtUSD(r.extras)+'</b> · Total de la importación: <b>'+fmtUSD(r.total)+'</b>'+ordTxt;
   }
 
   const impForm = document.getElementById('impForm');
@@ -846,8 +897,8 @@
     if(e.target.id === 'impSupplier'){ refreshImpProductCatalog(); return; }
     const k = e.target.dataset.k, tr = e.target.closest('tr');
     if(k && tr){
-      const list = tr.closest('#impCostsTbl') ? impF.costs : impF.items, row = list[Number(tr.dataset.i)];
-      row[k] = ['qty','price','venta','amount','rate'].includes(k) ? e.target.value : e.target.value;
+      const list = tr.closest('#impCostsTbl') ? impF.costs : tr.closest('#impOrdersTbl') ? impF.orders : impF.items, row = list[Number(tr.dataset.i)];
+      row[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     }
     refreshImpPreview();
   });
@@ -860,6 +911,7 @@
     }
     if(!k || !tr) return;
     const i = Number(tr.dataset.i);
+    if(tr.closest('#impOrdersTbl')){ renderImpRows(); refreshImpPreview(); return; }
     if(tr.closest('#impItemsTbl') && k === 'pid'){
       impF.items[i].pid = e.target.value;
       const p = products.find(x=>x.id === e.target.value);
@@ -875,10 +927,16 @@
     refreshImpPreview();
   });
   impForm.addEventListener('click', function(e){
-    if(e.target.dataset.rm !== undefined){ impF.items.splice(Number(e.target.dataset.rm), 1); if(!impF.items.length) impF.items.push({pid:'',name:'',qty:1,price:0,venta:0}); renderImpRows(); refreshImpPreview(); }
+    if(e.target.dataset.rm !== undefined){ impF.items.splice(Number(e.target.dataset.rm), 1); if(!impF.items.length) impF.items.push(newImpItem()); renderImpRows(); refreshImpPreview(); }
+    if(e.target.dataset.rmo !== undefined){
+      const o = impF.orders.splice(Number(e.target.dataset.rmo), 1)[0];
+      impF.items.forEach(r=>{ if(o && r.ok === o.key) r.ok = ''; });
+      renderImpRows(); refreshImpPreview();
+    }
     if(e.target.dataset.rmc !== undefined){ impF.costs.splice(Number(e.target.dataset.rmc), 1); renderImpRows(); refreshImpPreview(); }
   });
-  document.getElementById('impAddItem').addEventListener('click', ()=>{ impF.items.push({pid:'',name:'',qty:1,price:0,venta:0}); renderImpRows(); });
+  document.getElementById('impAddItem').addEventListener('click', ()=>{ impF.items.push(newImpItem()); renderImpRows(); });
+  document.getElementById('impAddOrder').addEventListener('click', ()=>{ impF.orders.push(newImpOrder()); renderImpRows(); });
   document.getElementById('impAddCost').addEventListener('click', ()=>{ impF.costs.push({kind:'bodega',desc:'',amount:0,cur:'',rate:0}); renderImpRows(); });
 
   // evita guardar dos veces si se pulsa dos veces o Enter + clic (duplicaba productos)
@@ -904,7 +962,8 @@
     let imp, error;
     const payload = {
       date:h.date || todayLocal(), supplier:h.supplier || null, origin_country:h.country || null, currency:h.cur, rate_per_usd:h.rate,
-      commission_pct:h.comm, tax_pct:h.taxPct, tax_included:h.taxIncl, allocation:h.alloc, payment_method:h.pay
+      commission_pct:h.comm, tax_pct:h.taxPct, tax_included:h.taxIncl, allocation:h.alloc, payment_method:h.pay,
+      purchase_date:document.getElementById('impPurchase').value || null
     };
 
     if(impEditId){
@@ -920,11 +979,24 @@
     if(impEditId){
       const d1 = await sb.from('import_items').delete().eq('import_id', imp.id);
       const d2 = await sb.from('import_costs').delete().eq('import_id', imp.id);
-      if(d1.error || d2.error){ console.error(d1.error || d2.error); showToast('No se pudo actualizar el detalle del borrador.'); return; }
+      const d3 = d1.error ? {} : await sb.from('supplier_orders').delete().eq('import_id', imp.id);
+      if(d1.error || d2.error || d3.error){ console.error(d1.error || d2.error || d3.error); showToast('No se pudo actualizar el detalle del borrador.'); return; }
+    }
+
+    // pedidos del proveedor: se crean primero para poder enlazar cada producto
+    const orderId = {};
+    for(const o of impF.orders){
+      const res = await sb.from('supplier_orders').insert({ import_id:imp.id, order_ref:o.ref.trim() || null, order_date:o.date || null,
+        discount_type:o.dtype, discount_value:Number(o.dval)||0, fee_pct:Number(o.fee)||0, fee_base:o.base, fee_rounding:!!o.round,
+        invoice_total:o.total === '' ? null : Number(o.total), invoice_ref:o.note.trim() || null }).select().single();
+      if(res.error){ console.error(res.error); showToast('No se pudo guardar un pedido del proveedor.'); return; }
+      orderId[o.key] = res.data.id;
     }
 
     const e1 = await sb.from('import_items').insert(items.map(r=>({ import_id:imp.id, product_id:r.pid || null,
-      product_name:(r.pid ? (products.find(p=>p.id===r.pid)||{}).name : r.name.trim()), qty:Number(r.qty), unit_price:Number(r.price)||0, venta_usd:Number(r.venta)||0 })));
+      product_name:(r.pid ? (products.find(p=>p.id===r.pid)||{}).name : r.name.trim()), qty:Number(r.qty), unit_price:Number(r.price)||0, venta_usd:Number(r.venta)||0,
+      supplier_order_id:orderId[r.ok] || null, invoice_name:r.iname.trim() || null, is_gift:!!r.gift,
+      qty_received:String(r.rec).trim() === '' ? null : Number(r.rec) })));
     const e2 = costs.length ? await sb.from('import_costs').insert(costs.map(c=>({ import_id:imp.id, kind:c.kind, description:c.desc || null,
       amount:Number(c.amount), currency:parseCur(c.cur), rate_per_usd:Number(c.rate) }))) : {};
     if(e1.error || e2.error){ console.error(e1.error || e2.error); showToast('No se pudo guardar los productos o costos.'); return; }
@@ -945,15 +1017,16 @@
     const tbody = document.querySelector('#tblImp tbody');
     document.getElementById('emptyImp').style.display = imports.length ? 'none' : 'block';
     tbody.innerHTML = imports.map(im=>{
-      const its = impItems.filter(x=>x.import_id === im.id), cs = impCosts.filter(x=>x.import_id === im.id);
-      const total = im.status === 'recibida' ? its.reduce((a,x)=>a + x.qty*Number(x.landed_unit_cost_usd||0), 0) :
+      const its = impItems.filter(x=>x.import_id === im.id), cs = impCosts.filter(x=>x.import_id === im.id), sos = supOrders.filter(x=>x.import_id === im.id);
+      const total = im.status === 'recibida' ? its.reduce((a,x)=>a + (x.qty_received ?? x.qty)*Number(x.landed_unit_cost_usd||0), 0) :
         calcImport({ rate:Number(im.rate_per_usd), taxPct:Number(im.tax_pct), taxIncl:im.tax_included, comm:Number(im.commission_pct), alloc:im.allocation },
-          its.map(x=>({qty:x.qty, price:Number(x.unit_price)})), cs.map(c=>({amount:Number(c.amount), rate:Number(c.rate_per_usd)}))).total;
+          its.map(x=>({qty:x.qty, price:Number(x.unit_price), ok:x.supplier_order_id || ''})), cs.map(c=>({amount:Number(c.amount), rate:Number(c.rate_per_usd)})),
+          sos.map(o=>({key:o.id, dtype:o.discount_type, dval:Number(o.discount_value)||0, fee:Number(o.fee_pct)||0, base:o.fee_base, round:!!o.fee_rounding}))).total;
       return '<tr><td data-label="#">'+im.number+'</td><td data-label="Fecha">'+im.date+'</td>'+
         '<td data-label="Proveedor">'+escapeHtml(im.supplier||'—')+(im.origin_country ? '<br><small>'+escapeHtml(im.origin_country)+'</small>' : '')+'</td>'+
         '<td data-label="Moneda">'+im.currency+' <small>('+Number(im.rate_per_usd)+')</small></td><td data-label="Pago">'+(PAY_LABEL[im.payment_method]||'')+'</td>'+
         '<td data-label="Prod.">'+its.length+'</td><td data-label="Total USD">'+fmtUSD(total)+'</td>'+
-        '<td data-label="Estado">'+(im.status === 'recibida' ? '<span class="pos">Recibida</span>' : 'Borrador')+'</td>'+
+        '<td data-label="Estado">'+(im.status === 'recibida' ? '<span class="pos">Recibida</span>' : 'Borrador')+(sos.length ? '<br><small>'+sos.length+' pedido'+(sos.length>1?'s':'')+' del proveedor</small>' : '')+'</td>'+
         '<td data-label="">'+(im.status === 'borrador' ? '<button class="link-btn" data-editimp="'+im.id+'">Editar</button> <button class="link-btn" data-recv="'+im.id+'">Recibir</button> <button class="link-btn danger" data-delimp="'+im.id+'">Eliminar</button>' : (me && me.role === 'admin' ? '<button class="link-btn danger" data-reopen="'+im.id+'">Reabrir</button>' : ''))+'</td></tr>';
     }).join('');
     tbody.querySelectorAll('[data-editimp]').forEach(b=>b.addEventListener('click', async ()=>{
@@ -973,11 +1046,16 @@
       document.getElementById('impTaxIncl').value = im.tax_included ? '1' : '0';
       document.getElementById('impComm').value = Number(im.commission_pct) || 0;
       document.getElementById('impAlloc').value = im.allocation || 'valor';
+      const sos = supOrders.filter(x=>x.import_id === id);
+      document.getElementById('impPurchase').value = im.purchase_date || '';
       impF = {
-        items: its.map(x=>({pid:x.product_id || '', name:x.product_id ? '' : (x.product_name || ''), qty:Number(x.qty)||1, price:Number(x.unit_price)||0, venta:Number(x.venta_usd)||0})),
+        orders: sos.map(o=>({key:o.id, ref:o.order_ref || '', date:o.order_date || '', dtype:o.discount_type, dval:Number(o.discount_value)||0, fee:Number(o.fee_pct)||0,
+          base:o.fee_base, round:!!o.fee_rounding, total:o.invoice_total === null ? '' : String(o.invoice_total), note:o.invoice_ref || ''})),
+        items: its.map(x=>({pid:x.product_id || '', name:x.product_id ? '' : (x.product_name || ''), qty:Number(x.qty)||1, price:Number(x.unit_price)||0, venta:Number(x.venta_usd)||0,
+          ok:x.supplier_order_id || '', iname:x.invoice_name || '', rec:x.qty_received === null || x.qty_received === undefined ? '' : String(x.qty_received), gift:!!x.is_gift})),
         costs: cs.map(x=>({kind:x.kind || 'bodega', desc:x.description || '', amount:Number(x.amount)||0, cur:x.currency || '', rate:Number(x.rate_per_usd)||0}))
       };
-      if(!impF.items.length) impF.items = [{pid:'',name:'',qty:1,price:0,venta:0}];
+      if(!impF.items.length) impF.items = [newImpItem()];
       document.querySelector('#view-importaciones h2').textContent = 'Editar borrador #'+im.number;
       document.getElementById('impSaveDraft').textContent = 'Actualizar borrador';
       renderImpRows(); refreshImpPreview();
