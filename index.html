@@ -150,6 +150,7 @@
   .prod-thumb{ width:48px; height:48px; object-fit:contain; border-radius: var(--radius); background: var(--cream-deep); }
   .prod-thumb.placeholder{ display:flex; align-items:center; justify-content:center; color: var(--wine-line); font-size:18px; }
   .pos{ color: var(--good); font-weight:600; }
+  .tag-personal{ display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:rgba(120,120,120,.18); margin-left:6px; white-space:nowrap; }
   .neg{ color: var(--danger); font-weight:600; }
   .row-actions{ display:flex; gap:8px; }
   .link-btn{ background:none; border:none; cursor:pointer; color: var(--ink-soft); font-size:13px; padding:2px 4px; }
@@ -350,6 +351,9 @@
               </div>
               <div class="field span2">
                 <div class="calc-line" style="margin-top:26px;">Margen estimado por unidad: <b id="calcMargen">$0.00</b></div>
+              </div>
+              <div class="field span3">
+                <label style="display:flex;gap:8px;align-items:center;font-weight:500;"><input type="checkbox" id="prodPersonal" style="width:auto;"> Uso personal (no se vende: no cuenta en margen, stock total ni lista de ventas)</label>
               </div>
             </div>
             <div class="form-actions">
@@ -677,10 +681,10 @@
 
   /* ===================== ROW <-> OBJECT MAPPERS ===================== */
   function rowToProduct(r){
-    return { id:r.id, photo:r.photo||'', name:r.name, desc:r.description||'', precioMXN:Number(r.precio_mxn), tasa:Number(r.tasa), exportCost:Number(r.export_cost), costoUSD:Number(r.costo_usd), ventaUSD:Number(r.venta_usd), stock:Number(r.stock) };
+    return { id:r.id, photo:r.photo||'', name:r.name, desc:r.description||'', precioMXN:Number(r.precio_mxn), tasa:Number(r.tasa), exportCost:Number(r.export_cost), costoUSD:Number(r.costo_usd), ventaUSD:Number(r.venta_usd), stock:Number(r.stock), personal:!!r.personal_use };
   }
   function productToRow(p){
-    return { photo:p.photo||null, name:p.name, description:p.desc||null, precio_mxn:p.precioMXN, tasa:p.tasa, export_cost:p.exportCost, costo_usd:p.costoUSD, venta_usd:p.ventaUSD, stock:p.stock };
+    return { photo:p.photo||null, name:p.name, description:p.desc||null, precio_mxn:p.precioMXN, tasa:p.tasa, export_cost:p.exportCost, costo_usd:p.costoUSD, venta_usd:p.ventaUSD, stock:p.stock, personal_use:!!p.personal };
   }
   function rowToSale(r){
     return { id:r.id, productId:r.product_id, productName:r.product_name, client:r.client, qty:Number(r.qty), date:r.date, totalUSD:Number(r.total_usd), costoUnitario:Number(r.costo_unitario), profitUSD:Number(r.profit_usd), paymentType:r.payment_type, phone:r.contact_phone, advisor:r.advisor, orderId:r.order_id || null };
@@ -1610,6 +1614,7 @@
   function resetProductForm(){
     productForm.reset();
     document.getElementById('prodId').value = '';
+    document.getElementById('prodPersonal').checked = false;
     document.getElementById('prodTasa').value = '18.00';
     document.getElementById('prodExport').value = '5.00';
     currentPhotoData = '';
@@ -1638,7 +1643,8 @@
       name: document.getElementById('prodName').value.trim(),
       desc: document.getElementById('prodDesc').value.trim(),
       precioMXN: mxn, tasa, exportCost: exp, costoUSD, ventaUSD: venta,
-      stock: Number(document.getElementById('prodStock').value)
+      stock: Number(document.getElementById('prodStock').value),
+      personal: document.getElementById('prodPersonal').checked
     };
 
     let error;
@@ -1666,6 +1672,7 @@
     document.getElementById('prodExport').value = p.exportCost;
     document.getElementById('prodVenta').value = p.ventaUSD;
     document.getElementById('prodStock').value = p.stock;
+    document.getElementById('prodPersonal').checked = !!p.personal;
     currentPhotoData = p.photo || '';
     photoPreview.innerHTML = p.photo ? '<img src="'+p.photo+'" alt="preview">' : '&#128247;';
     document.getElementById('btnRecrop').style.display = p.photo ? '' : 'none';
@@ -1704,17 +1711,28 @@
       const tr = document.createElement('tr');
       tr.innerHTML =
         '<td data-label="Foto">' + (p.photo ? '<img class="prod-thumb" src="'+p.photo+'">' : '<div class="prod-thumb placeholder">&#128092;</div>') + '</td>' +
-        '<td data-label="Producto"><strong>'+escapeHtml(p.name)+'</strong></td>' +
+        '<td data-label="Producto"><strong>'+escapeHtml(p.name)+'</strong>'+(p.personal?' <span class="tag-personal">Uso personal</span>':'')+'</td>' +
         '<td data-label="Costo MXN">'+fmtMXN(p.precioMXN)+'</td>' +
         '<td data-label="Costo total USD">'+fmtUSD(p.costoUSD)+'</td>' +
         '<td data-label="Precio venta USD">'+fmtUSD(p.ventaUSD)+'</td>' +
-        '<td data-label="Margen"><span class="'+(margen>=0?'pos':'neg')+'">'+fmtUSD(margen)+'</span></td>' +
+        '<td data-label="Margen">'+(p.personal?'<span style="color:var(--muted,#888)">—</span>':'<span class="'+(margen>=0?'pos':'neg')+'">'+fmtUSD(margen)+'</span>')+'</td>' +
         '<td data-label="Stock">'+p.stock+'</td>' +
-        '<td data-label=""><div class="row-actions"><button class="link-btn" data-edit="'+p.id+'">Editar</button><button class="link-btn danger" data-del="'+p.id+'">Eliminar</button></div></td>';
+        '<td data-label=""><div class="row-actions"><button class="link-btn" data-edit="'+p.id+'">Editar</button><button class="link-btn" data-personal="'+p.id+'">'+(p.personal?'Quitar uso personal':'Uso personal')+'</button><button class="link-btn danger" data-del="'+p.id+'">Eliminar</button></div></td>';
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=>editProduct(b.dataset.edit)));
     tbody.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>deleteProduct(b.dataset.del)));
+    tbody.querySelectorAll('[data-personal]').forEach(b=> b.addEventListener('click', ()=>togglePersonal(b.dataset.personal)));
+  }
+
+  async function togglePersonal(id){
+    const p = products.find(x=>x.id === id);
+    if(!p) return;
+    const { error } = await sb.from('products').update({ personal_use: !p.personal }).eq('id', id);
+    if(error){ console.error(error); showToast('No se pudo actualizar el producto.'); return; }
+    await refreshAllData();
+    renderAll();
+    showToast(p.personal ? 'Ya no es de uso personal.' : 'Marcado como uso personal.');
   }
 
   const inventorySearch = document.getElementById('inventorySearch');
@@ -1735,7 +1753,7 @@
   function renderSaleLines(){
     const tb = document.querySelector('#saleLinesTbl tbody');
     saleLines = saleLines.filter((l,i)=> true);
-    document.getElementById('saleProductList').innerHTML = products.slice()
+    document.getElementById('saleProductList').innerHTML = products.filter(x=>!x.personal)
       .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''), 'es', { sensitivity:'base', numeric:true }))
       .map(x=>'<option value="'+escapeHtml(x.name)+'" label="Stock: '+x.stock+'"></option>').join('');
     tb.innerHTML = saleLines.map((l,i)=>{
@@ -1766,8 +1784,8 @@
     if(e.target.dataset.k !== 'pname') return;
     const l = saleLines[Number(e.target.closest('tr').dataset.i)];
     const q = normText(e.target.value);
-    let found = q ? products.filter(x=>normText(x.name) === q) : [];
-    if(!found.length && q) found = products.filter(x=>normText(x.name).includes(q));
+    let found = q ? products.filter(x=>!x.personal && normText(x.name) === q) : [];
+    if(!found.length && q) found = products.filter(x=>!x.personal && normText(x.name).includes(q));
     if(found.length > 1){ const inStock = found.filter(x=>x.stock > 0); if(inStock.length === 1) found = inStock; }
     if(found.length === 1){ l.pid = found[0].id; l.text = ''; }
     else {
@@ -2013,7 +2031,7 @@
     const gastos = expenses.reduce((sum,g)=> sum + g.amountUSD, 0);
     const costos = cogs + gastos;
     const ganancia = ingresos - costos;
-    const stockTotal = products.reduce((sum,p)=> sum + (Number(p.stock)||0), 0);
+    const stockTotal = products.filter(p=>!p.personal).reduce((sum,p)=> sum + (Number(p.stock)||0), 0);
 
     document.getElementById('statIngresos').textContent = fmtUSD(ingresos);
     document.getElementById('statCostos').textContent = fmtUSD(costos);
