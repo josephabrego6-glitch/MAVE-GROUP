@@ -387,16 +387,10 @@
           <form id="saleForm">
             <div class="form-grid">
               <div class="field span2">
-                <label for="saleProduct">Producto</label>
-                <select id="saleProduct" required></select>
-              </div>
-              <div class="field">
-                <label for="saleQty">Cantidad</label>
-                <input type="number" id="saleQty" min="1" step="1" value="1" required>
-              </div>
-              <div class="field">
-                <label for="saleUnitPrice">Precio unitario (USD)</label>
-                <input type="number" id="saleUnitPrice" min="0" step="0.01" placeholder="Precio del catálogo">
+                <label>Productos de la venta (puedes vender varios a la vez: cartera + letras, etc.)</label>
+                <div style="overflow-x:auto;"><table id="saleLinesTbl">
+                  <thead><tr><th>Producto</th><th>Cant.</th><th>Precio unit. (USD)</th><th>Subtotal</th><th></th></tr></thead><tbody></tbody></table></div>
+                <button type="button" class="btn btn-ghost" id="saleAddLine" style="width:auto;margin-top:8px;">+ Agregar otro producto</button>
               </div>
               <div class="field">
                 <label for="saleClient">Cliente</label>
@@ -688,7 +682,7 @@
     return { photo:p.photo||null, name:p.name, description:p.desc||null, precio_mxn:p.precioMXN, tasa:p.tasa, export_cost:p.exportCost, costo_usd:p.costoUSD, venta_usd:p.ventaUSD, stock:p.stock };
   }
   function rowToSale(r){
-    return { id:r.id, productId:r.product_id, productName:r.product_name, client:r.client, qty:Number(r.qty), date:r.date, totalUSD:Number(r.total_usd), costoUnitario:Number(r.costo_unitario), profitUSD:Number(r.profit_usd), paymentType:r.payment_type, phone:r.contact_phone, advisor:r.advisor };
+    return { id:r.id, productId:r.product_id, productName:r.product_name, client:r.client, qty:Number(r.qty), date:r.date, totalUSD:Number(r.total_usd), costoUnitario:Number(r.costo_unitario), profitUSD:Number(r.profit_usd), paymentType:r.payment_type, phone:r.contact_phone, advisor:r.advisor, orderId:r.order_id || null };
   }
   function saleToRow(s){
     return { product_id:s.productId, product_name:s.productName, client:s.client, qty:s.qty, date:s.date, total_usd:s.totalUSD, costo_unitario:s.costoUnitario, profit_usd:s.profitUSD };
@@ -1732,31 +1726,52 @@
 
   /* ===================== SALES ===================== */
   const saleForm = document.getElementById('saleForm');
-  const saleProductSel = document.getElementById('saleProduct');
-  const saleQtyInput = document.getElementById('saleQty');
-  const saleUnitPriceInput = document.getElementById('saleUnitPrice');
+  let saleLines = [{ pid:'', qty:1, price:'' }];
+  const lineProduct = l => products.find(x=>x.id === l.pid);
+  const linePrice = l => { const p = lineProduct(l); return (l.price !== '' && !isNaN(Number(l.price))) ? Number(l.price) : (p ? p.ventaUSD : 0); };
+  function saleTotalNow(){ return saleLines.reduce((a,l)=> a + (lineProduct(l) ? linePrice(l) * (Number(l.qty)||0) : 0), 0); }
 
-  function renderSaleProductOptions(){
-    const cur = saleProductSel.value;
-    saleProductSel.innerHTML = '<option value="">Selecciona un producto</option>' +
-      products.map(p=> '<option value="'+p.id+'">'+escapeHtml(p.name)+' (stock: '+p.stock+')</option>').join('');
-    if(products.some(p=>p.id === cur)) saleProductSel.value = cur;
-    refreshSaleCalc();
+  function renderSaleLines(){
+    const tb = document.querySelector('#saleLinesTbl tbody');
+    saleLines = saleLines.filter((l,i)=> true);
+    tb.innerHTML = saleLines.map((l,i)=>{
+      const p = lineProduct(l);
+      return '<tr data-i="'+i+'"><td><select data-k="pid" required><option value="">Selecciona un producto</option>'+
+        products.map(x=>'<option value="'+x.id+'"'+(x.id===l.pid?' selected':'')+'>'+escapeHtml(x.name)+' (stock: '+x.stock+')</option>').join('')+'</select></td>'+
+        '<td><input data-k="qty" type="number" min="1" step="1" value="'+l.qty+'" style="width:70px" required></td>'+
+        '<td><input data-k="price" type="number" min="0" step="0.01" value="'+(l.price === '' ? (p ? p.ventaUSD : '') : l.price)+'" placeholder="Catálogo" style="width:110px"></td>'+
+        '<td data-sub>'+fmtUSD(p ? linePrice(l) * (Number(l.qty)||0) : 0)+'</td>'+
+        '<td>'+(saleLines.length > 1 ? '<button type="button" class="link-btn danger" data-rmline="'+i+'">Quitar</button>' : '')+'</td></tr>';
+    }).join('');
+    refreshSaleCalc(true);
   }
+  function renderSaleProductOptions(){ renderSaleLines(); }
+
+  const saleLinesTbl = document.getElementById('saleLinesTbl');
+  saleLinesTbl.addEventListener('input', e=>{
+    const k = e.target.dataset.k, tr = e.target.closest('tr');
+    if(!k || !tr || k === 'pid') return;
+    const l = saleLines[Number(tr.dataset.i)];
+    l[k] = e.target.value;
+    const p = lineProduct(l);
+    tr.querySelector('[data-sub]').textContent = fmtUSD(p ? linePrice(l) * (Number(l.qty)||0) : 0);
+    refreshSaleCalc(true);
+  });
+  saleLinesTbl.addEventListener('change', e=>{
+    if(e.target.dataset.k !== 'pid') return;
+    const l = saleLines[Number(e.target.closest('tr').dataset.i)];
+    l.pid = e.target.value; l.price = '';
+    customRows = []; renderCustomRows(); renderSaleLines(); refreshSaleCalc();
+  });
+  saleLinesTbl.addEventListener('click', e=>{
+    if(e.target.dataset.rmline === undefined) return;
+    saleLines.splice(Number(e.target.dataset.rmline), 1);
+    if(!saleLines.length) saleLines = [{ pid:'', qty:1, price:'' }];
+    renderSaleLines(); refreshSaleCalc(true);
+  });
+  document.getElementById('saleAddLine').addEventListener('click', ()=>{ saleLines.push({ pid:'', qty:1, price:'' }); renderSaleLines(); });
 
   let customRows = [];
-  function salePrice(p){
-    const v = saleUnitPriceInput.value;
-    return (v !== '' && !isNaN(Number(v))) ? Number(v) : (p ? p.ventaUSD : 0);
-  }
-  function syncSalePrice(){
-    const p = products.find(x=>x.id === saleProductSel.value);
-    saleUnitPriceInput.value = p ? p.ventaUSD : '';
-  }
-  function saleTotalNow(){
-    const p = products.find(x=>x.id === saleProductSel.value);
-    return p ? salePrice(p) * (Number(saleQtyInput.value)||0) : 0;
-  }
   function renderCustomRows(){
     const box = document.getElementById('saleCustomRows');
     box.innerHTML = '';
@@ -1787,13 +1802,9 @@
   }
 
   function refreshSaleCalc(keepRows){
-    const p = products.find(x=>x.id === saleProductSel.value);
-    const qty = Number(saleQtyInput.value)||0;
-    const price = salePrice(p);
-    const total = p ? price * qty : 0;
+    const total = saleTotalNow();
     document.getElementById('calcSaleTotal').textContent = fmtUSD(total);
-
-    const cost = p ? p.costoUSD * qty : 0;
+    const cost = saleLines.reduce((a,l)=>{ const p = lineProduct(l); return a + (p ? p.costoUSD * (Number(l.qty)||0) : 0); }, 0);
     const profit = total - cost;
     const margin = total > 0 ? (profit/total*100) : 0;
     document.getElementById('calcSaleCost').textContent = fmtUSD(cost);
@@ -1801,7 +1812,6 @@
     pe.textContent = fmtUSD(profit); pe.style.color = profit < 0 ? 'var(--danger)' : 'var(--good)';
     const me2 = document.getElementById('calcSaleMargin');
     me2.textContent = margin.toFixed(1) + '%'; me2.style.color = profit < 0 ? 'var(--danger)' : 'var(--good)';
-
     const type = salePayType.value;
     const cuotas = type === 'cuotas';
     const custom = type === 'personalizado';
@@ -1833,9 +1843,6 @@
   }
   const salePayType = document.getElementById('salePayType');
   const saleAbono = document.getElementById('saleAbono');
-  saleProductSel.addEventListener('change', ()=>{ syncSalePrice(); customRows = []; renderCustomRows(); refreshSaleCalc(); });
-  saleQtyInput.addEventListener('input', ()=>refreshSaleCalc(true));
-  saleUnitPriceInput.addEventListener('input', ()=>refreshSaleCalc(true));
   salePayType.addEventListener('change', ()=> refreshSaleCalc());
   saleAbono.addEventListener('input', ()=>refreshSaleCalc());
   document.getElementById('saleAddPay').addEventListener('click', addCustomRow);
@@ -1843,15 +1850,16 @@
 
   saleForm.addEventListener('submit', async function(e){
     e.preventDefault();
-    const p = products.find(x=>x.id === saleProductSel.value);
-    if(!p){ showToast('Selecciona un producto.'); return; }
-    const qty = Number(saleQtyInput.value);
-    if(qty < 1){ showToast('La cantidad debe ser al menos 1.'); return; }
-    if(qty > p.stock){ showToast('No hay suficiente stock disponible.'); return; }
-
-    const unit = salePrice(p);
-    if(!(unit >= 0)){ showToast('El precio unitario no es válido.'); return; }
-    const total = unit * qty;
+    if(saleLines.some(l=>!lineProduct(l))){ showToast('Selecciona un producto en cada línea.'); return; }
+    if(saleLines.some(l=>!(Number(l.qty) >= 1))){ showToast('La cantidad debe ser al menos 1.'); return; }
+    const need = {};
+    saleLines.forEach(l=>{ need[l.pid] = (need[l.pid]||0) + Number(l.qty); });
+    for(const pid of Object.keys(need)){
+      const p = products.find(x=>x.id === pid);
+      if(need[pid] > p.stock){ showToast('No hay suficiente stock de '+p.name+' (disponible: '+p.stock+').'); return; }
+    }
+    if(saleLines.some(l=>!(linePrice(l) >= 0))){ showToast('El precio unitario no es válido.'); return; }
+    const total = saleTotalNow();
     let schedule = null;
     if(salePayType.value === 'personalizado'){
       if(!customRows.length){ showToast('Agrega al menos un pago.'); return; }
@@ -1860,11 +1868,11 @@
       if(Math.abs(sum-total) > 0.01){ showToast('Los pagos suman '+fmtUSD(sum)+' y el total es '+fmtUSD(total)+'.'); return; }
       schedule = customRows.map(r=>({ amount: Number(r.amount), due: r.due || todayLocal(), paid: !!r.paid }));
     }
+    const items = saleLines.map(l=>{ const p = lineProduct(l), u = linePrice(l);
+      return { product:p.id, qty:Number(l.qty), unit_price: Math.abs(u - p.ventaUSD) > 0.0001 ? u : null }; });
 
-    const { error: saleErr } = await sb.rpc('register_sale', {
-      p_product: p.id, p_qty: qty,
-      p_unit_price: Math.abs(unit - p.ventaUSD) > 0.0001 ? unit : null,
-      p_schedule: schedule,
+    const { error: saleErr } = await sb.rpc('register_sale_order', {
+      p_items: items, p_schedule: schedule,
       p_client: document.getElementById('saleClient').value.trim(),
       p_date: document.getElementById('saleDate').value || todayLocal(),
       p_phone: document.getElementById('salePhone').value.trim(),
@@ -1876,17 +1884,21 @@
 
     await refreshAllData();
     saleForm.reset();
-    customRows = []; renderCustomRows(); syncSalePrice();
+    customRows = []; renderCustomRows();
+    saleLines = [{ pid:'', qty:1, price:'' }];
     document.getElementById('saleDate').value = todayLocal();
     document.getElementById('saleAdvisor').value = (me && me.full_name) || '';
     renderAll();
-    showToast('Venta registrada.');
+    showToast(items.length > 1 ? 'Venta registrada ('+items.length+' productos).' : 'Venta registrada.');
   });
 
-  async function deleteSale(id){
-    if(!confirm('¿Eliminar esta venta? El stock del producto se restituirá.')) return;
-    const { error } = await sb.rpc('delete_sale', { p_sale: id });
-    if(error){ console.error(error); showToast(error.message || 'No se pudo eliminar la venta.'); return; }
+  async function deleteSale(ids){
+    const list = String(ids).split(',');
+    if(!confirm(list.length > 1 ? '¿Eliminar esta venta completa ('+list.length+' productos)? El stock de cada producto se restituirá.' : '¿Eliminar esta venta? El stock del producto se restituirá.')) return;
+    for(const id of list){
+      const { error } = await sb.rpc('delete_sale', { p_sale: id });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo eliminar la venta.'); await refreshAllData(); renderAll(); return; }
+    }
     await refreshAllData();
     renderAll();
     showToast('Venta eliminada.');
@@ -1899,26 +1911,37 @@
     const tv = sales.reduce((a,x)=>a+x.totalUSD,0), tp = sales.reduce((a,x)=>a+x.profitUSD,0);
     document.getElementById('salesSummary').innerHTML = sales.length ?
       'Vendido <b>'+fmtUSD(tv)+'</b> · Ganancia <b class="'+(tp>=0?'pos':'neg')+'">'+fmtUSD(tp)+'</b> · Margen <b>'+(tv>0?(tp/tv*100).toFixed(1):'0.0')+'%</b>' : '';
+    // una fila por venta: las líneas con el mismo order_id se agrupan
+    const groups = [], byOrder = {};
     sales.forEach(s=>{
-      const tr = document.createElement('tr');
-      const pays = salePayments.filter(x=>x.saleId === s.id);
+      if(!s.orderId){ groups.push([s]); return; }
+      if(!byOrder[s.orderId]){ byOrder[s.orderId] = []; groups.push(byOrder[s.orderId]); }
+      byOrder[s.orderId].push(s);
+    });
+    groups.forEach(g=>{
+      const s = g[0];
+      const totalUSD = g.reduce((a,x)=>a+x.totalUSD,0), profitUSD = g.reduce((a,x)=>a+x.profitUSD,0), qty = g.reduce((a,x)=>a+x.qty,0);
+      const pays = salePayments.filter(x=>g.some(y=>y.id === x.saleId)).sort((a,b)=>a.number-b.number);
       const paid = pays.filter(x=>x.paid).reduce((a,x)=>a+x.amount, 0);
       const next = pays.find(x=>!x.paid);
       const payHtml = !next ? '<span class="pos">Pagado</span>' :
-        'Saldo '+fmtUSD(s.totalUSD - paid)+'<br><small>'+(next.number === 0 ? 'Abono' : 'Cuota '+next.number)+': '+fmtUSD(next.amount)+' · vence '+next.due+
+        'Saldo '+fmtUSD(totalUSD - paid)+'<br><small>'+(next.number === 0 ? 'Abono' : 'Cuota '+next.number)+': '+fmtUSD(next.amount)+' · vence '+next.due+
         (next.due < todayLocal() ? ' <b class="neg">(vencida)</b>' : '')+'</small> <button class="link-btn" data-pay="'+next.id+'">Cobrar</button>';
+      const prodHtml = g.length === 1 ? escapeHtml(s.productName) :
+        g.map(x=>x.qty+' × '+escapeHtml(x.productName)).join('<br>');
+      const tr = document.createElement('tr');
       tr.innerHTML =
         '<td data-label="Fecha">'+s.date+'</td>' +
-        '<td data-label="Producto">'+escapeHtml(s.productName)+'</td>' +
+        '<td data-label="Producto">'+prodHtml+'</td>' +
         '<td data-label="Cliente">'+escapeHtml(s.client)+
           (s.phone ? '<br><small>'+escapeHtml(s.phone)+'</small>' : '')+
           (s.advisor ? '<br><small>Asesor: '+escapeHtml(s.advisor)+'</small>' : '')+'</td>' +
-        '<td data-label="Cant.">'+s.qty+'</td>' +
-        '<td data-label="Total USD">'+fmtUSD(s.totalUSD)+'</td>' +
-        '<td data-label="Ganancia USD"><span class="'+(s.profitUSD>=0?'pos':'neg')+'">'+fmtUSD(s.profitUSD)+'</span></td>' +
-        '<td data-label="Margen"><span class="'+(s.profitUSD>=0?'pos':'neg')+'">'+(s.totalUSD>0?(s.profitUSD/s.totalUSD*100).toFixed(1):'0.0')+'%</span></td>' +
+        '<td data-label="Cant.">'+qty+'</td>' +
+        '<td data-label="Total USD">'+fmtUSD(totalUSD)+'</td>' +
+        '<td data-label="Ganancia USD"><span class="'+(profitUSD>=0?'pos':'neg')+'">'+fmtUSD(profitUSD)+'</span></td>' +
+        '<td data-label="Margen"><span class="'+(profitUSD>=0?'pos':'neg')+'">'+(totalUSD>0?(profitUSD/totalUSD*100).toFixed(1):'0.0')+'%</span></td>' +
         '<td data-label="Pago">'+payHtml+'</td>' +
-        '<td data-label=""><button class="link-btn danger" data-delsale="'+s.id+'">Eliminar</button></td>';
+        '<td data-label=""><button class="link-btn danger" data-delsale="'+g.map(x=>x.id).join(',')+'">Eliminar</button></td>';
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll('[data-delsale]').forEach(b=> b.addEventListener('click', ()=>deleteSale(b.dataset.delsale)));
