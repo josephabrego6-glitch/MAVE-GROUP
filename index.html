@@ -1696,9 +1696,10 @@
     const tbody = document.querySelector('#tblInventario tbody');
     tbody.innerHTML = '';
     const term = inventorySearchTerm.trim().toLowerCase();
-    const visibleProducts = term
+    const visibleProducts = (term
       ? products.filter(p => String(p.name || '').toLowerCase().includes(term))
-      : products;
+      : products.slice()
+    ).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'es', { sensitivity:'base', numeric:true }));
     document.getElementById('emptyInventario').style.display = visibleProducts.length ? 'none' : 'block';
     document.getElementById('emptyInventario').textContent = products.length
       ? 'No se encontraron carteras con esa búsqueda.'
