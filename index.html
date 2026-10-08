@@ -511,6 +511,7 @@
             <thead><tr><th>#</th><th>Fecha</th><th>Proveedor</th><th>Moneda</th><th>Pago</th><th>Prod.</th><th>Total USD</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table></div>
           <p class="empty" id="emptyImp">Aún no hay importaciones registradas.</p>
         </div>
+        <div class="panel" id="impDetail" style="display:none;"></div>
       </section>
 
       <section class="view" id="view-seguridad">
@@ -1011,6 +1012,54 @@
   impForm.addEventListener('submit', e=>{ e.preventDefault(); saveImport(true); });
   document.getElementById('impSaveDraft').addEventListener('click', ()=>saveImport(false));
 
+
+  // Vista de solo lectura: muestra cómo quedó llenada una importación, sin modificar nada
+  function showImpDetail(id){
+    const im = imports.find(x=>x.id === id), box = document.getElementById('impDetail');
+    if(!im) return;
+    const its = impItems.filter(x=>x.import_id === id), cs = impCosts.filter(x=>x.import_id === id), sos = supOrders.filter(x=>x.import_id === id);
+    const n2 = v => (Math.round(Number(v||0)*100)/100).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const calc = calcImport({ rate:Number(im.rate_per_usd), taxPct:Number(im.tax_pct), taxIncl:im.tax_included, comm:Number(im.commission_pct), alloc:im.allocation },
+      its.map(x=>({qty:x.qty, price:Number(x.unit_price), ok:x.supplier_order_id || ''})), cs.map(c=>({amount:Number(c.amount), rate:Number(c.rate_per_usd)})),
+      sos.map(o=>({key:o.id, dtype:o.discount_type, dval:Number(o.discount_value)||0, fee:Number(o.fee_pct)||0, base:o.fee_base, round:!!o.fee_rounding})));
+    const unit = (x,k)=> im.status === 'recibida' ? Number(x.landed_unit_cost_usd||0) : calc.rows[k];
+    const totalUsd = its.reduce((a,x,k)=>a + (im.status === 'recibida' ? (x.qty_received ?? x.qty) : x.qty)*unit(x,k), 0);
+    const ordName = id2 => { const o = sos.find(z=>z.id === id2); return o ? (o.order_ref ? '#'+o.order_ref : 'Pedido') : '—'; };
+    const th = arr => '<thead><tr>'+arr.map(t=>'<th>'+t+'</th>').join('')+'</tr></thead>';
+    let h = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><h2 style="margin:0;">Importación #'+im.number+' · '+(im.status === 'recibida' ? 'Recibida' : 'Borrador')+' <small>(solo lectura)</small></h2><button type="button" class="link-btn" id="impDetailClose">Cerrar</button></div>';
+    h += '<p class="empty" style="display:block;margin:8px 0;">'+[
+      'Fecha: '+im.date, im.purchase_date ? 'Compra: '+im.purchase_date : '', 'Proveedor: '+escapeHtml(im.supplier||'—'), im.origin_country ? 'País: '+escapeHtml(im.origin_country) : '',
+      'Moneda: '+im.currency+' (tasa '+Number(im.rate_per_usd)+')', 'Pago: '+(PAY_LABEL[im.payment_method]||'—'),
+      'Impuesto: '+Number(im.tax_pct)+'% '+(im.tax_included ? '(incluido)' : '(se suma)'), 'Cargo del proveedor: '+Number(im.commission_pct)+'%',
+      'Reparto de costos: '+(im.allocation === 'valor' ? 'según valor' : 'igual por unidad')].filter(Boolean).join(' · ')+'</p>';
+    if(sos.length){
+      h += '<h3 style="margin:14px 0 6px;">Pedidos del proveedor</h3><div style="overflow-x:auto;"><table>'+th(['Pedido','Fecha','Subtotal','Descuento','Cargo','Total calculado','Factura','Diferencia','Reembolso','Origen / notas'])+'<tbody>'+
+        sos.map(o=>{
+          const t = calc.orders.find(z=>z.key === o.id) || {sub:0,disc:0,fee:0,calc:0};
+          const d = o.invoice_total === null ? null : Math.round((t.calc - Number(o.invoice_total))*100)/100;
+          return '<tr><td data-label="Pedido">'+escapeHtml(o.order_ref ? '#'+o.order_ref : '—')+'</td><td data-label="Fecha">'+(o.order_date||'')+'</td><td data-label="Subtotal">'+n2(t.sub)+'</td>'+
+            '<td data-label="Descuento">'+n2(t.disc)+(o.discount_type === 'porcentaje' ? ' <small>('+Number(o.discount_value)+'%)</small>' : '')+'</td>'+
+            '<td data-label="Cargo">'+n2(t.fee)+' <small>('+Number(o.fee_pct)+'% '+(o.fee_base === 'despues_descuento' ? 'con descuento' : 'sin descuento')+')</small></td><td data-label="Total calculado"><b>'+n2(t.calc)+'</b></td>'+
+            '<td data-label="Factura">'+(o.invoice_total === null ? '—' : n2(o.invoice_total))+'</td>'+
+            '<td data-label="Diferencia">'+(d === null ? '—' : d === 0 ? '<span class="pos">Cuadra</span>' : '<span class="neg">'+n2(d)+'</span>')+'</td>'+
+            '<td data-label="Reembolso">'+(Number(o.refund_amount) ? n2(o.refund_amount) : '—')+'</td><td data-label="Origen / notas">'+escapeHtml([o.invoice_ref, o.notes].filter(Boolean).join(' — '))+'</td></tr>';
+        }).join('')+'</tbody></table></div>';
+    }
+    h += '<h3 style="margin:14px 0 6px;">Productos</h3><div style="overflow-x:auto;"><table>'+th(['Producto','Nombre en la factura','Pedido','Cant.','Recibida','Precio unit. '+im.currency,'Costo unit. USD','Venta USD','Regalo'])+'<tbody>'+
+      its.map((x,k)=>'<tr><td data-label="Producto">'+escapeHtml(x.product_name||'')+'</td><td data-label="Nombre en la factura">'+escapeHtml(x.invoice_name||'')+'</td><td data-label="Pedido">'+escapeHtml(ordName(x.supplier_order_id))+'</td>'+
+        '<td data-label="Cant.">'+x.qty+'</td><td data-label="Recibida">'+(x.qty_received ?? x.qty)+'</td><td data-label="Precio unit.">'+n2(x.unit_price)+'</td>'+
+        '<td data-label="Costo unit. USD">'+fmtUSD(unit(x,k))+'</td><td data-label="Venta USD">'+(Number(x.venta_usd) ? fmtUSD(x.venta_usd) : '—')+'</td><td data-label="Regalo">'+(x.is_gift ? 'Sí' : '')+'</td></tr>').join('')+'</tbody></table></div>';
+    if(cs.length){
+      h += '<h3 style="margin:14px 0 6px;">Otros gastos</h3><div style="overflow-x:auto;"><table>'+th(['Tipo','Descripción','Monto','Moneda','Tasa','USD'])+'<tbody>'+
+        cs.map(c=>'<tr><td data-label="Tipo">'+(COST_LABEL[c.kind]||c.kind)+'</td><td data-label="Descripción">'+escapeHtml(c.description||'')+'</td><td data-label="Monto">'+n2(c.amount)+'</td><td data-label="Moneda">'+c.currency+'</td><td data-label="Tasa">'+Number(c.rate_per_usd)+'</td><td data-label="USD">'+fmtUSD(Number(c.amount)/Number(c.rate_per_usd))+'</td></tr>').join('')+'</tbody></table></div>';
+    }
+    h += '<div class="calc-line" style="margin-top:12px;">Costos adicionales: <b>'+fmtUSD(calc.extras)+'</b> · Total de la importación: <b>'+fmtUSD(totalUsd)+'</b></div>';
+    if(im.notes) h += '<p class="empty" style="display:block;">Notas: '+escapeHtml(im.notes)+'</p>';
+    box.innerHTML = h; box.style.display = 'block';
+    document.getElementById('impDetailClose').addEventListener('click', ()=>{ box.style.display = 'none'; });
+    box.scrollIntoView({behavior:'smooth'});
+  }
+
   function renderImports(){
     const dl = document.getElementById('currencyList');
     if(dl.children.length !== currencies.length) dl.innerHTML = currencies.map(c=>'<option value="'+escapeHtml(curLabel(c))+'"></option>').join('');
@@ -1027,7 +1076,7 @@
         '<td data-label="Moneda">'+im.currency+' <small>('+Number(im.rate_per_usd)+')</small></td><td data-label="Pago">'+(PAY_LABEL[im.payment_method]||'')+'</td>'+
         '<td data-label="Prod.">'+its.length+'</td><td data-label="Total USD">'+fmtUSD(total)+'</td>'+
         '<td data-label="Estado">'+(im.status === 'recibida' ? '<span class="pos">Recibida</span>' : 'Borrador')+(sos.length ? '<br><small>'+sos.length+' pedido'+(sos.length>1?'s':'')+' del proveedor</small>' : '')+'</td>'+
-        '<td data-label="">'+(im.status === 'borrador' ? '<button class="link-btn" data-editimp="'+im.id+'">Editar</button> <button class="link-btn" data-recv="'+im.id+'">Recibir</button> <button class="link-btn danger" data-delimp="'+im.id+'">Eliminar</button>' : (me && me.role === 'admin' ? '<button class="link-btn danger" data-reopen="'+im.id+'">Reabrir</button>' : ''))+'</td></tr>';
+        '<td data-label=""><button class="link-btn" data-viewimp="'+im.id+'">Ver</button> '+(im.status === 'borrador' ? '<button class="link-btn" data-editimp="'+im.id+'">Editar</button> <button class="link-btn" data-recv="'+im.id+'">Recibir</button> <button class="link-btn danger" data-delimp="'+im.id+'">Eliminar</button>' : (me && me.role === 'admin' ? '<button class="link-btn danger" data-reopen="'+im.id+'">Reabrir</button>' : ''))+'</td></tr>';
     }).join('');
     tbody.querySelectorAll('[data-editimp]').forEach(b=>b.addEventListener('click', async ()=>{
       const id = b.dataset.editimp;
@@ -1068,6 +1117,7 @@
       if(error){ console.error(error); showToast(error.message || 'No se pudo recibir.'); return; }
       await refreshAllData(); renderAll(); showToast('Importación recibida.');
     }));
+    tbody.querySelectorAll('[data-viewimp]').forEach(b=>b.addEventListener('click', ()=>showImpDetail(b.dataset.viewimp)));
     tbody.querySelectorAll('[data-reopen]').forEach(b=>b.addEventListener('click', async ()=>{
       if(!confirm('¿Reabrir esta importación para corregirla? Se restará del inventario lo que sumó y volverá a borrador. Después podrás editarla y recibirla otra vez.')) return;
       const { error } = await sb.rpc('reopen_import', { p_import: b.dataset.reopen });
