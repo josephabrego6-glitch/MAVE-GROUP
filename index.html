@@ -288,6 +288,18 @@
         </div>
 
         <div class="panel">
+          <h2>Ganancia por mes</h2>
+          <div style="overflow-x:auto;">
+          <table id="tblMonthly">
+            <thead><tr><th>Mes</th><th>Ventas</th><th>Ingresos</th><th>Costo de lo vendido</th><th>Ganancia bruta</th><th>Gastos</th><th>Ganancia neta</th><th>Margen neto</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          </div>
+          <div class="empty-state" id="emptyMonthly" style="display:none;">Aún no hay movimientos.</div>
+          <p style="font-size:12px;color:var(--ink-soft);margin:8px 0 0;">Ganancia bruta = ingresos − costo real de lo vendido. Ganancia neta = ganancia bruta − gastos del mes.</p>
+        </div>
+
+        <div class="panel">
           <h2>Últimas ventas</h2>
           <div style="overflow-x:auto;">
           <table id="tblRecentSales">
@@ -1690,8 +1702,10 @@
     const tasa = Number(document.getElementById('prodTasa').value);
     const exp = Number(document.getElementById('prodExport').value);
     const venta = Number(document.getElementById('prodVenta').value);
-    const costoUSD = calcCostoUSD(mxn, tasa, exp);
     const existing = id ? products.find(p=>p.id === id) : null;
+    // Si no cambiaste precio MXN, tasa ni exportación, se conserva el costo real que viene de tus importaciones
+    const sameBase = existing && Math.abs(existing.precioMXN - mxn) < 0.0001 && Math.abs(existing.tasa - tasa) < 0.0001 && Math.abs(existing.exportCost - exp) < 0.0001;
+    const costoUSD = sameBase ? existing.costoUSD : calcCostoUSD(mxn, tasa, exp);
     const photo = currentPhotoData || (existing ? existing.photo : '');
 
     const product = {
@@ -2302,6 +2316,7 @@
     document.getElementById('statStock').textContent = stockTotal;
     document.getElementById('cardGanancia').classList.toggle('neg', ganancia < 0);
 
+    renderMonthly();
     const tbody = document.querySelector('#tblRecentSales tbody');
     tbody.innerHTML = '';
     const recent = sales.slice(0,5);
@@ -2317,6 +2332,35 @@
         '<td data-label="Ganancia"><span class="'+(s.profitUSD>=0?'pos':'neg')+'">'+fmtUSD(s.profitUSD)+'</span></td>';
       tbody.appendChild(tr);
     });
+  }
+
+  function renderMonthly(){
+    const tb = document.querySelector('#tblMonthly tbody');
+    if(!tb) return;
+    tb.innerHTML = '';
+    const m = {};
+    const get = ym => m[ym] || (m[ym] = { n:0, ing:0, cogs:0, gas:0, orders:new Set() });
+    sales.forEach(x=>{ const r = get(String(x.date).slice(0,7)); r.ing += x.totalUSD; r.cogs += x.costoUnitario * x.qty; r.orders.add(x.orderId || x.id); });
+    expenses.forEach(g=>{ get(String(g.date).slice(0,7)).gas += g.amountUSD; });
+    const months = Object.keys(m).sort().reverse();
+    document.getElementById('emptyMonthly').style.display = months.length ? 'none' : 'block';
+    const tot = { n:0, ing:0, cogs:0, gas:0 };
+    months.forEach(ym=>{
+      const r = m[ym], bruta = r.ing - r.cogs, neta = bruta - r.gas, n = r.orders.size;
+      tot.n += n; tot.ing += r.ing; tot.cogs += r.cogs; tot.gas += r.gas;
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td data-label="Mes"><strong>'+monthLabel(ym)+'</strong></td><td data-label="Ventas">'+n+'</td><td data-label="Ingresos">'+fmtUSD(r.ing)+'</td><td data-label="Costo vendido">'+fmtUSD(r.cogs)+'</td>'+
+        '<td data-label="Ganancia bruta">'+fmtUSD(bruta)+'</td><td data-label="Gastos">'+fmtUSD(r.gas)+'</td>'+
+        '<td data-label="Ganancia neta"><span class="'+(neta>=0?'pos':'neg')+'">'+fmtUSD(neta)+'</span></td>'+
+        '<td data-label="Margen neto"><span class="'+(neta>=0?'pos':'neg')+'">'+(r.ing>0?(neta/r.ing*100).toFixed(1):'0.0')+'%</span></td>';
+      tb.appendChild(tr);
+    });
+    if(months.length > 1){
+      const bruta = tot.ing - tot.cogs, neta = bruta - tot.gas, tr = document.createElement('tr');
+      tr.style.fontWeight = '700';
+      tr.innerHTML = '<td>Total</td><td>'+tot.n+'</td><td>'+fmtUSD(tot.ing)+'</td><td>'+fmtUSD(tot.cogs)+'</td><td>'+fmtUSD(bruta)+'</td><td>'+fmtUSD(tot.gas)+'</td><td><span class="'+(neta>=0?'pos':'neg')+'">'+fmtUSD(neta)+'</span></td><td>'+(tot.ing>0?(neta/tot.ing*100).toFixed(1):'0.0')+'%</td>';
+      tb.appendChild(tr);
+    }
   }
 
   /* ===================== BOOT ===================== */
