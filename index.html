@@ -380,9 +380,15 @@
 
         <div class="panel">
           <h2>Tabla de inventario</h2>
-          <div class="field" style="margin:12px 0 16px;">
-            <label for="inventorySearch">Buscar en inventario</label>
-            <input type="search" id="inventorySearch" placeholder="Buscar por nombre de cartera..." autocomplete="off">
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin:12px 0 16px;">
+            <div class="field" style="flex:1 1 260px;margin:0;">
+              <label for="inventorySearch">Buscar en inventario</label>
+              <input type="search" id="inventorySearch" placeholder="Buscar por nombre de cartera..." autocomplete="off">
+            </div>
+            <div class="field" style="flex:0 0 200px;margin:0;">
+              <label for="inventoryFilter">Mostrar</label>
+              <select id="inventoryFilter"></select>
+            </div>
           </div>
           <div style="overflow-x:auto;">
           <table id="tblInventario">
@@ -1763,14 +1769,19 @@
   }
 
   let inventorySearchTerm = '';
+  let inventoryStockFilter = 'all';
 
   function renderInventory(){
     const tbody = document.querySelector('#tblInventario tbody');
     tbody.innerHTML = '';
     const term = inventorySearchTerm.trim().toLowerCase();
-    const visibleProducts = (term
-      ? products.filter(p => String(p.name || '').toLowerCase().includes(term))
-      : products.slice()
+    const fSel = document.getElementById('inventoryFilter');
+    const nDisp = products.filter(p=>p.stock > 0).length, nAgot = products.length - nDisp;
+    fSel.innerHTML = '<option value="all">Todos ('+products.length+')</option><option value="disp">Disponibles ('+nDisp+')</option><option value="agot">Agotados ('+nAgot+')</option>';
+    fSel.value = inventoryStockFilter;
+    const visibleProducts = products.filter(p =>
+      (!term || String(p.name || '').toLowerCase().includes(term)) &&
+      (inventoryStockFilter === 'all' || (inventoryStockFilter === 'disp' ? p.stock > 0 : p.stock <= 0))
     ).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'es', { sensitivity:'base', numeric:true }));
     document.getElementById('emptyInventario').style.display = visibleProducts.length ? 'none' : 'block';
     document.getElementById('emptyInventario').textContent = products.length
@@ -1805,6 +1816,7 @@
     showToast(p.personal ? 'Ya no es de uso personal.' : 'Marcado como uso personal.');
   }
 
+  document.getElementById('inventoryFilter').addEventListener('change', function(){ inventoryStockFilter = this.value; renderInventory(); });
   const inventorySearch = document.getElementById('inventorySearch');
   if(inventorySearch){
     inventorySearch.addEventListener('input', function(){
