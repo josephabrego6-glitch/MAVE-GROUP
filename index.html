@@ -1802,12 +1802,12 @@
     tbody.innerHTML = '';
     const term = inventorySearchTerm.trim().toLowerCase();
     const fSel = document.getElementById('inventoryFilter');
-    const nDisp = products.filter(p=>p.stock > 0).length, nAgot = products.length - nDisp;
+    const nDisp = products.filter(p=>!p.personal && p.stock > 0).length, nAgot = products.filter(p=>!p.personal && p.stock <= 0).length;
     fSel.innerHTML = '<option value="all">Todos ('+products.length+')</option><option value="disp">Disponibles ('+nDisp+')</option><option value="agot">Agotados ('+nAgot+')</option>';
     fSel.value = inventoryStockFilter;
     const visibleProducts = products.filter(p =>
       (!term || String(p.name || '').toLowerCase().includes(term)) &&
-      (inventoryStockFilter === 'all' || (inventoryStockFilter === 'disp' ? p.stock > 0 : p.stock <= 0))
+      (inventoryStockFilter === 'all' || (!p.personal && (inventoryStockFilter === 'disp' ? p.stock > 0 : p.stock <= 0)))
     ).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'es', { sensitivity:'base', numeric:true }));
     document.getElementById('emptyInventario').style.display = visibleProducts.length ? 'none' : 'block';
     document.getElementById('emptyInventario').textContent = products.length
