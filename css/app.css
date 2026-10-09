@@ -231,3 +231,18 @@
 .ro-ventas #view-ventas .panel:has(form),.ro-ventas #view-ventas .link-btn,
 .ro-importaciones #view-importaciones .panel:has(form),.ro-importaciones #view-importaciones .link-btn,
 .ro-insumos #view-insumos .panel:has(form),.ro-insumos #view-insumos .link-btn{display:none !important}
+
+/* ---------- Ajuste al ancho de pantalla (celular, tablet y PC) ---------- */
+html, body{ max-width:100%; overflow-x:hidden; }
+.layout, main.content, .view, .panel, .form-grid > *, .field{ min-width:0; max-width:100%; }
+main.content{ flex:1 1 0%; }
+.panel > div[style*="overflow-x"], .view > div[style*="overflow-x"]{ max-width:100%; -webkit-overflow-scrolling:touch; }
+input, select, textarea, button{ max-width:100%; }
+img, canvas, svg{ max-width:100%; }
+@media (max-width: 860px){
+  #impItemsTbl, #impOrdersTbl, #impCostsTbl{ min-width:0; width:100%; table-layout:fixed; }
+  #impItemsTbl tr, #impOrdersTbl tr, #impCostsTbl tr{ max-width:100%; }
+  #impItemsTbl td, #impOrdersTbl td, #impCostsTbl td{ min-width:0; max-width:100%; }
+  #impItemsTbl td, #impOrdersTbl td, #impCostsTbl td{ flex-wrap:wrap; }
+  #impItemsTbl td > select, #impItemsTbl td > input, #impOrdersTbl td > select, #impOrdersTbl td > input, #impCostsTbl td > select, #impCostsTbl td > input{ flex:1 1 140px; min-width:0; width:auto; max-width:100%; }
+}
