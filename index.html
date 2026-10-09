@@ -44,6 +44,21 @@
   #loginScreen::before{ width:520px; height:520px; background:#F0CFC7; top:-180px; left:-160px; }
   #loginScreen::after{ width:420px; height:420px; background:#FBF1ED; bottom:-170px; right:-120px; border:1px solid var(--gold); }
   .login-card{ position:relative; z-index:1; }
+  .login-photos{
+    position:relative; z-index:1; width:440px; min-height:560px; align-self:stretch;
+    border-radius:18px 0 0 18px; overflow:hidden; background:var(--cream-deep);
+    box-shadow:0 10px 40px rgba(122,39,64,0.14); border:1px solid var(--wine-line); border-right:none; border-top:3px solid var(--gold);
+  }
+  .login-photos img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity 1.2s ease; }
+  .login-photos img.on{ opacity:1; }
+  .login-photos::after{ content:"women's bags"; position:absolute; left:20px; bottom:16px; color:#FFFAF8; font-family:'Playfair Display',serif; font-style:italic; font-size:18px; text-shadow:0 1px 8px rgba(62,39,35,.55); z-index:2; }
+  #loginScreen:has(.login-photos) .login-card{ border-radius:0 18px 18px 0; align-self:stretch; display:flex; flex-direction:column; justify-content:center; }
+  @media(max-width:860px){
+    #loginScreen{ flex-direction:column; padding:16px; }
+    .login-photos img{ object-position:50% 68%; }
+    .login-photos{ width:100%; max-width:380px; min-height:0; height:200px; border-radius:18px 18px 0 0; border-right:1px solid var(--wine-line); }
+    #loginScreen:has(.login-photos) .login-card{ border-radius:0 0 18px 18px; align-self:auto; }
+  }
   .login-card{
     width: 100%; max-width: 380px;
     background: var(--white);
@@ -233,6 +248,12 @@
 
 <!-- ================= LOGIN ================= -->
 <div id="loginScreen">
+  <div class="login-photos" id="loginPhotos" aria-hidden="true">
+    <img class="on" src="img/login-1.jpg" alt="" decoding="async">
+    <img src="img/login-2.jpg" alt="" loading="lazy" decoding="async">
+    <img src="img/login-3.jpg" alt="" loading="lazy" decoding="async">
+    <img src="img/login-4.jpg" alt="" loading="lazy" decoding="async">
+  </div>
   <div class="login-card">
     <p class="login-word">MAVE</p>
     <p class="login-sub">women's bags — panel privado</p>
@@ -2396,6 +2417,15 @@
   checkSession();
 })();
 
+
+  (function(){
+    var box=document.getElementById('loginPhotos'); if(!box) return;
+    var imgs=box.querySelectorAll('img'), k=0;
+    setInterval(function(){
+      if(document.getElementById('loginScreen').style.display==='none') return;
+      imgs[k].classList.remove('on'); k=(k+1)%imgs.length; imgs[k].classList.add('on');
+    },4500);
+  })();
 </script>
 </body>
 </html>
