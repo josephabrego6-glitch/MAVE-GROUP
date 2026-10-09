@@ -2176,8 +2176,6 @@
           '<div>'+(p.id === r.next.id ? '<b>' : '')+lbl+' '+fmtUSD(p.amount)+' · '+p.due+(p.due < today ? ' <b class="neg">(vencido)</b>' : '')+(p.id === r.next.id ? '</b>' : '')+'</div>';
       }).join('');
       const nextLbl = r.next.number === 0 ? 'el abono' : 'el pago '+r.next.number+' de '+lastN;
-      const digits = String(s.phone||'').replace(/\D/g,''); const wa = digits ? (digits.length === 8 ? '507'+digits : digits) : '';
-      const msg = 'Hola '+(s.client||'')+', te recuerdo que está pendiente '+nextLbl+' de tu compra por '+fmtUSD(r.next.amount)+' (fecha: '+r.next.due+'). ¡Gracias!';
       const tr = document.createElement('tr');
       tr.innerHTML =
         '<td data-label="Cliente"><strong>'+escapeHtml(s.client)+'</strong>'+(s.phone?'<br><small>'+escapeHtml(s.phone)+'</small>':'')+(s.advisor?'<br><small>Asesor: '+escapeHtml(s.advisor)+'</small>':'')+'</td>'+
@@ -2185,8 +2183,7 @@
         '<td data-label="Cobrado / Saldo">Cobrado '+fmtUSD(r.paid)+'<br><b class="neg">Saldo '+fmtUSD(r.total-r.paid)+'</b></td>'+
         '<td data-label="Plan de pagos">'+chips+'</td>'+
         '<td data-label="Estado">'+ST[r.kind]+'<br><small>Falta '+nextLbl+'</small></td>'+
-        '<td data-label=""><div class="row-actions"><button class="link-btn" data-cobrar="'+r.next.id+'">Cobrar '+(r.next.number === 0 ? 'abono' : 'pago '+r.next.number)+'</button>'+
-        (wa ? '<a class="link-btn" target="_blank" rel="noopener" href="https://wa.me/'+wa+'?text='+encodeURIComponent(msg)+'">Recordar por WhatsApp</a>' : '')+'</div></td>';
+        '<td data-label=""><div class="row-actions"><button class="link-btn" data-cobrar="'+r.next.id+'">Cobrar '+(r.next.number === 0 ? 'abono' : 'pago '+r.next.number)+'</button>'+'</div></td>';
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll('[data-cobrar]').forEach(b=> b.addEventListener('click', async ()=>{
