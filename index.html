@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="css/app.css?v=4">
+<link rel="stylesheet" href="css/app.css?v=5">
 </head>
 <body>
 
@@ -58,6 +58,7 @@
     <nav class="sidenav">
       <button data-view="dashboard" class="active">Panel general</button>
       <button data-view="inventario">Inventario</button>
+      <button data-view="catalogo">Catálogo</button>
       <button data-view="ventas">Ventas</button>
       <button data-view="cobros">Cobros <span id="cobrosBadge"></span></button>
       <button data-view="importaciones">Importaciones</button>
@@ -196,6 +197,21 @@
       </section>
 
       <!-- ---------- VENTAS ---------- -->
+      <section class="view" id="view-catalogo">
+        <div class="view-header">
+          <h1>Catálogo</h1>
+          <p>Para mostrarle a tus clientes: toca una cartera para verla en grande.</p>
+        </div>
+        <div class="cat-bar">
+          <input type="search" id="catSearch" placeholder="Buscar cartera…" autocomplete="off">
+          <div class="cat-chips" id="catChips" role="tablist"></div>
+          <label class="cat-opt"><input type="checkbox" id="catPrices" checked> Mostrar precios</label>
+          <button type="button" class="btn btn-ghost" id="catClient" style="width:auto;">Modo cliente</button>
+        </div>
+        <div class="cat-grid" id="catGrid"></div>
+        <div class="empty-state" id="catEmpty" style="display:none;">No hay productos con ese filtro.</div>
+      </section>
+
       <section class="view" id="view-ventas">
         <div class="view-header">
           <h1>Ventas</h1>
@@ -507,8 +523,15 @@
   </div>
 </div>
 
+<div class="cat-lb" id="catLb" aria-hidden="true">
+  <button type="button" class="cat-lb-x" id="catLbX" aria-label="Cerrar">&times;</button>
+  <button type="button" class="cat-lb-n cat-lb-prev" id="catLbPrev" aria-label="Anterior">&#8249;</button>
+  <button type="button" class="cat-lb-n cat-lb-next" id="catLbNext" aria-label="Siguiente">&#8250;</button>
+  <div class="cat-lb-body"><div class="cat-lb-img" id="catLbImg"></div><div class="cat-lb-info" id="catLbInfo"></div></div>
+</div>
+<button type="button" class="cat-exit" id="catExit">Salir del modo cliente</button>
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js?v=4"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>

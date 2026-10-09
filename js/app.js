@@ -83,7 +83,7 @@
   function renderRowsIfIdle(){ if(!document.activeElement || !impForm.contains(document.activeElement)) renderImpRows(); }
   function renderAll(){
     renderInventory(); renderSaleProductOptions(); renderSales(); renderAdvisorChart(); renderPayBanner(); renderCobros(); renderExpenses();
-    renderImports(); renderRowsIfIdle(); renderSecurity(); renderDashboard();
+    renderImports(); renderRowsIfIdle(); renderSecurity(); renderDashboard(); renderCatalog();
   }
 
   /* ===================== IMPORTACIONES ===================== */
@@ -656,7 +656,7 @@
     MODULES.forEach(m => document.body.classList.toggle('ro-' + m, !canInsert(m)));
     const allowed = {
       dashboard: me.role === 'admin' || (canView('ventas') && canView('insumos')),
-      inventario: canView('inventario'),
+      inventario: canView('inventario'), catalogo: canView('inventario'),
       ventas: canView('ventas'), cobros: canView('ventas'), insumos: canView('insumos'), importaciones: canView('importaciones'), seguridad: me.role === 'admin'
     };
     let first = null;
@@ -757,7 +757,7 @@
     booted = false;
     me = null; authz = {}; clearTimeout(idleT); captchaReset();
     document.getElementById('authzBar').style.display = 'none';
-    MODULES.forEach(m => document.body.classList.remove('ro-' + m));
+    MODULES.forEach(m => document.body.classList.remove('ro-' + m)); document.body.classList.remove('client-mode');
   });
 
   /* ===================== CHANGE PASSWORD ===================== */
@@ -798,6 +798,8 @@
       document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('view-' + btn.dataset.view).classList.add('active');
+      document.body.dataset.view = btn.dataset.view;
+      if(btn.dataset.view !== 'catalogo') document.body.classList.remove('client-mode');
     });
   });
 
@@ -1674,6 +1676,65 @@
     renderAll();
     booted = true;
   }
+
+
+  /* ===================== CATÁLOGO (para mostrar al cliente) ===================== */
+  let catFilter = 'disp', catList = [], catIdx = 0;
+  function catItems(){
+    const term = (document.getElementById('catSearch').value || '').trim().toLowerCase();
+    return products.filter(p => !p.personal)
+      .filter(p => !term || String(p.name||'').toLowerCase().includes(term))
+      .filter(p => catFilter === 'all' || (catFilter === 'disp' ? p.stock > 0 : p.stock <= 0))
+      .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'es',{sensitivity:'base',numeric:true}));
+  }
+  function catBadge(p){ return p.stock <= 0 ? ['out','Agotado'] : (p.stock <= 2 ? ['low','Últimas unidades'] : ['','Disponible']); }
+  function renderCatalog(){
+    const grid = document.getElementById('catGrid'); if(!grid) return;
+    const base = products.filter(p=>!p.personal), nD = base.filter(p=>p.stock>0).length, nA = base.length - nD;
+    document.getElementById('catChips').innerHTML = [['disp','Disponibles ('+nD+')'],['agot','Agotados ('+nA+')'],['all','Todos ('+base.length+')']]
+      .map(c=>'<button type="button" class="cat-chip'+(catFilter===c[0]?' active':'')+'" data-cf="'+c[0]+'">'+c[1]+'</button>').join('');
+    const showP = document.body.classList.contains('client-mode') ? catShowPrices : document.getElementById('catPrices').checked;
+    catList = catItems();
+    document.getElementById('catEmpty').style.display = catList.length ? 'none' : 'block';
+    grid.innerHTML = catList.map((p,i)=>{
+      const b = catBadge(p);
+      return '<button type="button" class="cat-card'+(p.stock<=0?' out':'')+'" data-ci="'+i+'">'+
+        '<div class="cat-ph">'+(p.photo ? '<img src="'+p.photo+'" alt="'+escapeHtml(p.name)+'" loading="lazy">' : '&#128092;')+'<span class="cat-badge '+b[0]+'">'+b[1]+'</span></div>'+
+        '<div class="cat-meta"><p class="cat-name">'+escapeHtml(p.name)+'</p>'+(showP ? '<div class="cat-price">'+fmtUSD(p.ventaUSD)+'</div>' : '')+'</div></button>';
+    }).join('');
+  }
+  let catShowPrices = true;
+  function catOpen(i){
+    if(!catList.length) return;
+    catIdx = (i + catList.length) % catList.length;
+    const p = catList[catIdx], b = catBadge(p);
+    const showP = document.body.classList.contains('client-mode') ? catShowPrices : document.getElementById('catPrices').checked;
+    document.getElementById('catLbImg').innerHTML = p.photo ? '<img src="'+p.photo+'" alt="'+escapeHtml(p.name)+'">' : '<div style="font-size:90px;">&#128092;</div>';
+    document.getElementById('catLbInfo').innerHTML = '<h3>'+escapeHtml(p.name)+'</h3>'+(p.desc ? '<p>'+escapeHtml(p.desc)+'</p>' : '')+(showP ? '<p class="pr">'+fmtUSD(p.ventaUSD)+'</p>' : '')+'<p>'+b[1]+'</p>';
+    const lb = document.getElementById('catLb'); lb.classList.add('open'); lb.setAttribute('aria-hidden','false');
+    const multi = catList.length > 1; lb.querySelectorAll('.cat-lb-n').forEach(x=>x.style.display = multi ? '' : 'none');
+  }
+  function catClose(){ const lb = document.getElementById('catLb'); lb.classList.remove('open'); lb.setAttribute('aria-hidden','true'); }
+  (function(){
+    document.getElementById('catGrid').addEventListener('click', e=>{ const c = e.target.closest('[data-ci]'); if(c) catOpen(Number(c.dataset.ci)); });
+    document.getElementById('catChips').addEventListener('click', e=>{ const c = e.target.closest('[data-cf]'); if(c){ catFilter = c.dataset.cf; renderCatalog(); } });
+    document.getElementById('catSearch').addEventListener('input', renderCatalog);
+    document.getElementById('catPrices').addEventListener('change', renderCatalog);
+    document.getElementById('catClient').addEventListener('click', ()=>{ catShowPrices = document.getElementById('catPrices').checked; document.body.classList.add('client-mode'); window.scrollTo(0,0); renderCatalog(); });
+    document.getElementById('catExit').addEventListener('click', ()=>{ document.body.classList.remove('client-mode'); renderCatalog(); });
+    document.getElementById('catLbX').addEventListener('click', catClose);
+    document.getElementById('catLbPrev').addEventListener('click', ()=>catOpen(catIdx - 1));
+    document.getElementById('catLbNext').addEventListener('click', ()=>catOpen(catIdx + 1));
+    const lb = document.getElementById('catLb');
+    lb.addEventListener('click', e=>{ if(e.target === lb || e.target.classList.contains('cat-lb-body') || e.target.id === 'catLbImg') catClose(); });
+    document.addEventListener('keydown', e=>{
+      if(!lb.classList.contains('open')) return;
+      if(e.key === 'Escape') catClose(); else if(e.key === 'ArrowLeft') catOpen(catIdx - 1); else if(e.key === 'ArrowRight') catOpen(catIdx + 1);
+    });
+    let x0 = null;
+    lb.addEventListener('touchstart', e=>{ x0 = e.touches.length === 1 ? e.touches[0].clientX : null; }, {passive:true});
+    lb.addEventListener('touchend', e=>{ if(x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if(Math.abs(dx) > 60) catOpen(catIdx + (dx < 0 ? 1 : -1)); }, {passive:true});
+  })();
 
   /* ===================== INDICADOR DE CONEXIÓN (intensidad por color) ===================== */
   (function(){

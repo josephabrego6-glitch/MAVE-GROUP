@@ -262,3 +262,41 @@ img, canvas, svg{ max-width:100%; }
 .net-login{ position:absolute; top:14px; right:14px; z-index:3; margin:0; }
 .top-actions{ display:flex; align-items:center; gap:8px; }
 @media (max-width:480px){ .net{ padding:6px 9px; margin-right:0; } .net[data-level="4"] .net-t, .net[data-level="3"] .net-t{ display:none; } }
+
+/* ---------- Catálogo ---------- */
+.cat-bar{ display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; margin-bottom:18px; }
+.cat-bar input[type="search"]{ flex:1 1 220px; min-width:0; padding:11px 14px; border:1px solid var(--wine-line); border-radius:999px; background:var(--white); font:inherit; color:var(--ink); }
+.cat-chips{ display:flex; gap:8px; flex-wrap:wrap; }
+.cat-chip{ border:1px solid var(--wine-line); background:var(--white); color:var(--wine); padding:9px 15px; border-radius:999px; font:inherit; font-size:13.5px; cursor:pointer; }
+.cat-chip.active{ background:var(--wine); color:var(--white); border-color:var(--wine); }
+.cat-opt{ display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-soft); cursor:pointer; }
+.cat-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:18px; }
+.cat-card{ background:var(--white); border:1px solid var(--wine-line); border-radius:16px; overflow:hidden; cursor:pointer; padding:0; text-align:left; font:inherit; color:inherit; display:flex; flex-direction:column; transition:transform .15s ease, box-shadow .15s ease; }
+.cat-card:hover{ transform:translateY(-3px); box-shadow:var(--shadow); }
+.cat-ph{ position:relative; aspect-ratio:4/5; background:var(--cream-deep); display:flex; align-items:center; justify-content:center; font-size:38px; color:var(--wine-line); }
+.cat-ph img{ width:100%; height:100%; object-fit:cover; display:block; }
+.cat-card.out .cat-ph img{ filter:grayscale(.85) opacity(.65); }
+.cat-badge{ position:absolute; top:10px; left:10px; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:600; background:var(--white); color:var(--good); border:1px solid #BFD3C1; }
+.cat-badge.low{ color:#9A6B12; border-color:#E8CF8E; background:#FFF8E6; }
+.cat-badge.out{ color:var(--danger); border-color:#E3A9A1; background:#FDF0EE; }
+.cat-meta{ padding:12px 14px 15px; }
+.cat-name{ font-family:'Playfair Display',serif; font-size:15.5px; font-weight:600; color:var(--wine); line-height:1.25; margin:0 0 4px; }
+.cat-price{ font-size:15px; font-weight:600; color:var(--ink); }
+@media (max-width:560px){ .cat-grid{ grid-template-columns:repeat(2,1fr); gap:12px; } .cat-name{ font-size:14px; } }
+.cat-lb{ position:fixed; inset:0; z-index:200; background:rgba(40,16,26,.94); display:none; align-items:center; justify-content:center; padding:16px; }
+.cat-lb.open{ display:flex; }
+.cat-lb-body{ display:flex; flex-direction:column; align-items:center; gap:14px; max-width:min(900px,100%); max-height:100%; width:100%; }
+.cat-lb-img{ flex:1 1 auto; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
+.cat-lb-img img{ max-width:100%; max-height:74vh; object-fit:contain; border-radius:12px; touch-action:pinch-zoom; }
+.cat-lb-info{ text-align:center; color:#FBF1ED; max-width:560px; }
+.cat-lb-info h3{ font-family:'Playfair Display',serif; font-size:22px; margin:0 0 4px; color:#FBF1ED; }
+.cat-lb-info p{ margin:4px 0; font-size:14px; opacity:.9; }
+.cat-lb-info .pr{ font-size:20px; font-weight:600; color:#E6CBA9; }
+.cat-lb-x{ position:absolute; top:12px; right:14px; width:44px; height:44px; border-radius:50%; border:1px solid rgba(255,255,255,.4); background:rgba(0,0,0,.25); color:#fff; font-size:28px; line-height:1; cursor:pointer; z-index:2; }
+.cat-lb-n{ position:absolute; top:50%; transform:translateY(-50%); width:44px; height:64px; border:none; background:rgba(0,0,0,.25); color:#fff; font-size:38px; cursor:pointer; border-radius:10px; z-index:2; }
+.cat-lb-prev{ left:8px; } .cat-lb-next{ right:8px; }
+@media (max-width:560px){ .cat-lb-n{ width:36px; height:54px; font-size:30px; } }
+.cat-exit{ display:none; position:fixed; bottom:16px; right:16px; z-index:150; padding:8px 14px; border-radius:999px; border:1px solid var(--wine-line); background:rgba(255,250,248,.92); color:var(--ink-soft); font:inherit; font-size:12px; cursor:pointer; opacity:.75; }
+body.client-mode .cat-exit{ display:block; }
+body.client-mode .topbar, body.client-mode nav.sidenav, body.client-mode #payBanner, body.client-mode #authzBar, body.client-mode .cat-bar .cat-opt, body.client-mode #catClient{ display:none !important; }
+body[data-view="catalogo"] #payBanner, body[data-view="catalogo"] #authzBar{ display:none !important; }
