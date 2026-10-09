@@ -247,16 +247,18 @@ img, canvas, svg{ max-width:100%; }
   #impItemsTbl td > select, #impItemsTbl td > input, #impOrdersTbl td > select, #impOrdersTbl td > input, #impCostsTbl td > select, #impCostsTbl td > input{ flex:1 1 140px; min-width:0; width:auto; max-width:100%; }
 }
 
-/* ---------- Indicador de conexión ---------- */
-.net{ display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border-radius:999px; border:1px solid var(--wine-line); background:var(--white); font-size:12px; font-weight:600; color:var(--good); white-space:nowrap; margin-right:8px; }
-.net svg{ width:16px; height:16px; flex-shrink:0; }
-.net[data-state="slow"]{ color:#9A6B12; border-color:#E0C27A; background:#FFF8E6; }
-.net[data-state="off"]{ color:var(--danger); border-color:#E3A9A1; background:#FDF0EE; }
-.net[data-state="ok"] .net-t::before{ content:"En línea"; }
-.net[data-state="slow"] .net-t::before{ content:"Lenta"; }
-.net[data-state="off"] .net-t::before{ content:"Sin conexión"; }
+/* ---------- Indicador de conexión (intensidad por color) ---------- */
+.net{ --nc:#3E7D4F; display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border-radius:999px; border:1px solid var(--wine-line); background:var(--white); font-size:12px; font-weight:600; color:var(--nc); white-space:nowrap; margin-right:8px; }
+.net svg{ width:17px; height:17px; flex-shrink:0; }
+.net svg rect{ fill:currentColor; }
+.net[data-level="4"]{ --nc:#2F7D4A; }
+.net[data-level="3"]{ --nc:#5E9A32; }
+.net[data-level="2"]{ --nc:#B8820F; background:#FFF8E6; border-color:#E8CF8E; }
+.net[data-level="1"]{ --nc:#C2501F; background:#FFF0E8; border-color:#EBB79F; }
+.net[data-level="0"]{ --nc:var(--danger); background:#FDF0EE; border-color:#E3A9A1; }
+.net[data-level="3"] .b4, .net[data-level="2"] .b3, .net[data-level="2"] .b4, .net[data-level="1"] .b2, .net[data-level="1"] .b3, .net[data-level="1"] .b4, .net[data-level="0"] rect{ opacity:.22; }
 .net .slash{ display:none; }
-.net[data-state="off"] .slash{ display:block; }
+.net[data-level="0"] .slash{ display:block; }
 .net-login{ position:absolute; top:14px; right:14px; z-index:3; margin:0; }
 .top-actions{ display:flex; align-items:center; gap:8px; }
-@media (max-width:480px){ .net{ padding:6px 9px; margin-right:0; } .net[data-state="ok"] .net-t{ display:none; } }
+@media (max-width:480px){ .net{ padding:6px 9px; margin-right:0; } .net[data-level="4"] .net-t, .net[data-level="3"] .net-t{ display:none; } }

@@ -1675,44 +1675,54 @@
     booted = true;
   }
 
-  /* ===================== INDICADOR DE CONEXIÓN ===================== */
+  /* ===================== INDICADOR DE CONEXIÓN (intensidad por color) ===================== */
   (function(){
-    const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16.2a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/><path class="slash" d="M3 3l18 18"/></svg><span class="net-t"></span>';
+    const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect class="b1" x="3" y="15" width="4" height="6" rx="1"/><rect class="b2" x="8.5" y="11" width="4" height="10" rx="1"/><rect class="b3" x="14" y="7" width="4" height="14" rx="1"/><rect class="b4" x="19.5" y="3" width="3" height="18" rx="1"/><path class="slash" d="M3 3l18 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg><span class="net-t"></span>';
     const els = [document.getElementById('netStatus'), document.getElementById('netStatusLogin')].filter(Boolean);
     els.forEach(e => e.innerHTML = ICON);
-    let state = 'ok', timer = null, first = true;
-    const TITLES = { ok:'Conectado al servidor', slow:'Conexión lenta: puede tardar en guardar', off:'Sin conexión: no se puede registrar ni guardar' };
-    function setState(s){
-      const prev = state; state = s;
-      els.forEach(e => { e.dataset.state = s; e.title = TITLES[s]; e.setAttribute('aria-label', TITLES[s]); });
-      if(!first && prev !== s){
-        if(s === 'off') showToast('Sin conexión: no se puede registrar ni guardar hasta que vuelva.');
-        else if(prev === 'off') showToast('Conexión restablecida.');
+    const LABELS = ['Sin conexión','Débil','Regular','Buena','Excelente'];
+    let state = 'ok', level = 4, timer = null, first = true, samples = [];
+    function levelFor(ms){ return ms < 400 ? 4 : ms < 1000 ? 3 : ms < 2000 ? 2 : 1; }
+    function paint(ms){
+      const lbl = LABELS[level], conn = navigator.connection && navigator.connection.effectiveType ? ' · red ' + navigator.connection.effectiveType.toUpperCase() : '';
+      const title = level === 0 ? 'Sin conexión: no se puede registrar ni guardar'
+        : 'Internet ' + lbl.toLowerCase() + (ms ? ' · ' + Math.round(ms) + ' ms' : '') + conn + (level <= 1 ? ' · puede tardar en guardar' : '');
+      els.forEach(e => { e.dataset.state = state; e.dataset.level = level; e.title = title; e.setAttribute('aria-label', title); e.querySelector('.net-t').textContent = lbl; });
+    }
+    function setLevel(l, ms){
+      const prevState = state; level = l; state = l === 0 ? 'off' : (l === 1 ? 'slow' : 'ok');
+      paint(ms);
+      if(!first && prevState !== state){
+        if(state === 'off') showToast('Sin conexión: no se puede registrar ni guardar hasta que vuelva.');
+        else if(prevState === 'off') showToast('Conexión restablecida.');
       }
       first = false;
     }
     async function check(){
-      if(!navigator.onLine){ setState('off'); return; }
+      if(!navigator.onLine){ samples = []; setLevel(0); return; }
       const ctl = new AbortController(), t0 = performance.now(), to = setTimeout(()=>ctl.abort(), 8000);
       try{
         const r = await fetch(SUPABASE_URL + '/auth/v1/health', { headers:{ apikey: SUPABASE_ANON_KEY }, cache:'no-store', signal: ctl.signal });
         clearTimeout(to);
-        if(!r.ok && r.status >= 500){ setState('off'); return; }
-        setState((performance.now() - t0) > 2000 ? 'slow' : 'ok');
-      }catch(e){ clearTimeout(to); setState('off'); }
+        if(!r.ok && r.status >= 500){ samples = []; setLevel(0); return; }
+        const ms = performance.now() - t0;
+        samples.push(ms); if(samples.length > 3) samples.shift();
+        const avg = samples.reduce((a,x)=>a+x,0) / samples.length;
+        setLevel(levelFor(avg), avg);
+      }catch(e){ clearTimeout(to); samples = []; setLevel(0); }
     }
-    function schedule(){ clearInterval(timer); timer = setInterval(check, 20000); }
+    function schedule(){ clearInterval(timer); timer = setInterval(check, 15000); }
     window.addEventListener('online', check);
-    window.addEventListener('offline', ()=> setState('off'));
+    window.addEventListener('offline', ()=>{ samples = []; setLevel(0); });
     document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) check(); });
     // Sin conexión no se deja guardar nada: se frena el envío de cualquier formulario
     document.addEventListener('submit', ev => {
       if(state === 'off' || !navigator.onLine){
         ev.preventDefault(); ev.stopImmediatePropagation();
-        showToast('Sin conexión: no se pudo registrar. Espera a que el indicador vuelva a "En línea".');
+        showToast('Sin conexión: no se pudo registrar. Espera a que el indicador vuelva a marcar señal.');
       }
     }, true);
-    check(); schedule();
+    paint(); check(); schedule();
   })();
 
   checkSession();
