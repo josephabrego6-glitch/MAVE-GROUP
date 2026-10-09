@@ -269,6 +269,7 @@
     </nav>
 
     <main class="content">
+      <div id="payBanner" style="display:none;margin:0 0 14px;padding:12px 16px;border:1px solid var(--gold);background:var(--white);font-size:14px;"></div>
       <div id="authzBar" style="display:none;margin:0 0 14px;padding:10px 14px;border:1px solid #c9a96e;border-radius:8px;font-size:14px;"></div>
 
       <!-- ---------- DASHBOARD ---------- -->
@@ -441,6 +442,19 @@
               <button type="submit" class="btn btn-primary" style="width:auto;">Registrar venta</button>
             </div>
           </form>
+        </div>
+
+        <div class="panel">
+          <h2>Quién vende más</h2>
+          <div class="form-grid" style="margin-bottom:12px;">
+            <div class="field"><label for="advMonth">Mes</label><select id="advMonth"></select></div>
+            <div class="field"><label for="advMetric">Ver por</label><select id="advMetric">
+              <option value="total">Monto vendido (USD)</option>
+              <option value="profit">Ganancia (USD)</option>
+              <option value="n">Número de ventas</option></select></div>
+          </div>
+          <div id="advChart"></div>
+          <div class="calc-line" id="advLeaders" style="margin-top:12px;"></div>
         </div>
 
         <div class="panel">
@@ -726,7 +740,7 @@
   }
   function renderRowsIfIdle(){ if(!document.activeElement || !impForm.contains(document.activeElement)) renderImpRows(); }
   function renderAll(){
-    renderInventory(); renderSaleProductOptions(); renderSales(); renderExpenses();
+    renderInventory(); renderSaleProductOptions(); renderSales(); renderAdvisorChart(); renderPayBanner(); renderExpenses();
     renderImports(); renderRowsIfIdle(); renderSecurity(); renderDashboard();
   }
 
@@ -1980,6 +1994,77 @@
     tbody.querySelectorAll('[data-pay]').forEach(b=> b.addEventListener('click', async ()=>{
       if(!confirm('¿Registrar este pago como cobrado hoy?')) return;
       const { error } = await sb.rpc('mark_payment', { p_payment: b.dataset.pay, p_paid: true, p_paid_date: todayLocal() });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
+      await refreshAllData(); renderAll(); showToast('Pago registrado.');
+    }));
+  }
+
+  /* ===================== VENTAS POR ASESOR ===================== */
+  const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const monthLabel = ym => MESES[Number(ym.slice(5,7))-1] + ' ' + ym.slice(0,4);
+  function advStats(list){
+    const orders = {};
+    list.forEach(s=>{
+      const key = s.orderId || s.id;
+      const o = orders[key] || (orders[key] = { adv:(s.advisor||'').trim() || 'Sin asesor', total:0, profit:0 });
+      o.total += s.totalUSD; o.profit += s.profitUSD;
+    });
+    const by = {};
+    Object.values(orders).forEach(o=>{
+      const a = by[o.adv] || (by[o.adv] = { name:o.adv, total:0, profit:0, n:0 });
+      a.total += o.total; a.profit += o.profit; a.n += 1;
+    });
+    return Object.values(by);
+  }
+  function renderAdvisorChart(){
+    const sel = document.getElementById('advMonth'), metricSel = document.getElementById('advMetric');
+    if(!sel) return;
+    const months = [...new Set(sales.map(s=>String(s.date).slice(0,7)))].sort().reverse();
+    const prev = sel.value;
+    sel.innerHTML = '<option value="all">Todos los meses</option>' + months.map(m=>'<option value="'+m+'">'+monthLabel(m)+'</option>').join('');
+    sel.value = months.includes(prev) || prev === 'all' ? prev : (months[0] || 'all');
+    const metric = metricSel.value || 'total';
+    const list = sel.value === 'all' ? sales : sales.filter(s=>String(s.date).slice(0,7) === sel.value);
+    const stats = advStats(list).sort((a,b)=>b[metric]-a[metric]);
+    const el = document.getElementById('advChart');
+    if(!stats.length){ el.innerHTML = '<p class="empty">Aún no hay ventas en este periodo.</p>'; }
+    else {
+      const max = Math.max(...stats.map(x=>x[metric]), 0.0001);
+      const fmt = v => metric === 'n' ? String(v) : fmtUSD(v);
+      el.innerHTML = stats.map((x,i)=>
+        '<div style="display:grid;grid-template-columns:minmax(90px,170px) 1fr auto;gap:10px;align-items:center;margin:6px 0;">'+
+        '<div style="font-weight:'+(i===0?'700':'500')+'">'+(i===0?'&#128081; ':'')+escapeHtml(x.name)+'</div>'+
+        '<div style="background:var(--cream-deep);height:22px;"><div style="height:100%;width:'+Math.max(2, Math.max(x[metric],0)/max*100)+'%;background:'+(i===0?'var(--wine)':'var(--gold)')+'"></div></div>'+
+        '<div style="min-width:130px;text-align:right;"><b>'+fmt(x[metric])+'</b><br><small>'+x.n+' venta'+(x.n===1?'':'s')+'</small></div></div>').join('');
+    }
+    // líder de cada mes
+    document.getElementById('advLeaders').innerHTML = months.length ? '<b>Líder por mes:</b> ' + months.map(m=>{
+      const st = advStats(sales.filter(s=>String(s.date).slice(0,7) === m)).sort((a,b)=>b[metric]-a[metric])[0];
+      return monthLabel(m)+': <b>'+escapeHtml(st.name)+'</b> ('+(metric === 'n' ? st.n : fmtUSD(st[metric]))+')';
+    }).join(' · ') : '';
+  }
+  ['advMonth','advMetric'].forEach(id=>{ const e = document.getElementById(id); if(e) e.addEventListener('change', renderAdvisorChart); });
+
+  /* ===================== AVISO DE COBROS (cuotas a 15 y 30 días) ===================== */
+  function renderPayBanner(){
+    const box = document.getElementById('payBanner');
+    if(!box) return;
+    const today = todayLocal(), soon = addDays(today, 3);
+    const items = salePayments.filter(p=>!p.paid && p.due <= soon).map(p=>{
+      const sale = sales.find(x=>x.id === p.saleId);
+      return { p, client: sale ? sale.client : '', kind: p.due < today ? 0 : (p.due === today ? 1 : 2) };
+    }).sort((a,b)=>a.kind-b.kind || (a.p.due < b.p.due ? -1 : 1));
+    const vb = document.querySelector('nav button[data-view="ventas"]');
+    if(vb) vb.innerHTML = 'Ventas' + (items.length ? ' <span style="background:var(--danger);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px;">'+items.length+'</span>' : '');
+    if(!items.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+    const LBL = ['<b class="neg">Vencida</b>','<b style="color:var(--wine)">Vence HOY</b>','Vence pronto'];
+    box.innerHTML = '<b>&#128276; Cobros pendientes</b>' + items.map(it=>
+      '<div style="margin-top:6px;">'+LBL[it.kind]+' · '+(it.p.number === 0 ? 'Abono' : 'Cuota '+it.p.number)+' · '+escapeHtml(it.client)+' · <b>'+fmtUSD(it.p.amount)+'</b> · '+it.p.due+
+      ' <button class="link-btn" data-paybanner="'+it.p.id+'">Cobrar</button></div>').join('');
+    box.style.display = '';
+    box.querySelectorAll('[data-paybanner]').forEach(b=> b.addEventListener('click', async ()=>{
+      if(!confirm('¿Registrar este pago como cobrado hoy?')) return;
+      const { error } = await sb.rpc('mark_payment', { p_payment: b.dataset.paybanner, p_paid: true, p_paid_date: todayLocal() });
       if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
       await refreshAllData(); renderAll(); showToast('Pago registrado.');
     }));
