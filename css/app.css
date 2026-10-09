@@ -298,5 +298,5 @@ img, canvas, svg{ max-width:100%; }
 @media (max-width:560px){ .cat-lb-n{ width:36px; height:54px; font-size:30px; } }
 .cat-exit{ display:none; position:fixed; bottom:16px; right:16px; z-index:150; padding:8px 14px; border-radius:999px; border:1px solid var(--wine-line); background:rgba(255,250,248,.92); color:var(--ink-soft); font:inherit; font-size:12px; cursor:pointer; opacity:.75; }
 body.client-mode .cat-exit{ display:block; }
-body.client-mode .topbar, body.client-mode nav.sidenav, body.client-mode #payBanner, body.client-mode #authzBar, body.client-mode .cat-bar .cat-opt, body.client-mode #catClient{ display:none !important; }
+body.client-mode .topbar, body.client-mode nav.sidenav, body.client-mode #payBanner, body.client-mode #authzBar, body.client-mode .cat-bar .cat-opt, body.client-mode #catClient, body.client-mode #catThumbs{ display:none !important; }
 body[data-view="catalogo"] #payBanner, body[data-view="catalogo"] #authzBar{ display:none !important; }

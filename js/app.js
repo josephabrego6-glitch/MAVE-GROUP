@@ -827,6 +827,24 @@
     });
   }
 
+  function makeThumb(dataUrl, maxDim){
+    maxDim = maxDim || 360;
+    return new Promise(function(resolve){
+      if(!dataUrl){ resolve(null); return; }
+      const img = new Image();
+      img.onload = function(){
+        let w = img.width, h = img.height;
+        if(w > h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
+        else if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = function(){ resolve(null); };
+      img.src = dataUrl;
+    });
+  }
+
   /* ===================== PRODUCT FORM ===================== */
   let currentPhotoData = '';
   const photoPreview = document.getElementById('photoPreview');
@@ -1008,10 +1026,12 @@
     };
 
     let error;
+    const row = productToRow(product);
+    if(!existing || currentPhotoData){ row.photo_thumb = await makeThumb(photo); }
     if(existing){
-      ({ error } = await sb.from('products').update(productToRow(product)).eq('id', existing.id));
+      ({ error } = await sb.from('products').update(row).eq('id', existing.id));
     } else {
-      ({ error } = await sb.from('products').insert(productToRow(product)));
+      ({ error } = await sb.from('products').insert(row));
     }
     if(error){ console.error(error); showToast('No se pudo guardar el producto.'); return; }
 
@@ -1785,6 +1805,28 @@
     }, true);
     paint(); check(); schedule();
   })();
+
+/* ===== Catálogo público: miniaturas ===== */
+(function(){
+  const btn = document.getElementById('catThumbs');
+  if(!btn) return;
+  btn.addEventListener('click', async function(){
+    btn.disabled = true;
+    try{
+      const r = await sb.from('products').select('id,photo').is('photo_thumb', null).not('photo','is',null);
+      if(r.error) throw r.error;
+      const list = r.data || [];
+      let n = 0;
+      for(const row of list){
+        btn.textContent = 'Preparando ' + (++n) + ' de ' + list.length + '…';
+        const t = await makeThumb(row.photo);
+        if(t){ const u = await sb.from('products').update({photo_thumb:t}).eq('id', row.id); if(u.error) throw u.error; }
+      }
+      showToast(list.length ? 'Miniaturas listas: ' + list.length : 'Todas las miniaturas ya estaban listas.');
+    }catch(e){ console.error(e); showToast('No se pudieron preparar las miniaturas.'); }
+    btn.disabled = false; btn.textContent = 'Preparar catálogo público';
+  });
+})();
 
   checkSession();
 })();
