@@ -47,17 +47,34 @@ footer{text-align:center;color:var(--soft);font-size:.8rem;padding:0 16px 30px}
 #lb .ask{margin-top:14px;display:inline-block;background:var(--wine-soft);color:#fff;border:0;padding:12px 24px;border-radius:999px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
 #lb .x,#lb .nv{position:absolute;background:rgba(255,255,255,.14);color:#fff;border:0;width:44px;height:44px;border-radius:50%;font-size:24px;cursor:pointer}
 #lb .x{top:14px;right:14px}#lb .pv{left:10px;top:40%}#lb .nx{right:10px;top:40%}
+.how{max-width:640px;margin:10px auto 26px;padding:22px 20px;background:var(--white);border:1px solid var(--line);border-radius:16px;text-align:center}
+.how h2{font-family:'Playfair Display',serif;font-weight:500;color:var(--wine);font-size:1.35rem;margin-bottom:14px}
+.how ul{list-style:none;padding:0;display:grid;gap:12px;text-align:left}
+.how li{display:flex;gap:12px;align-items:center;background:var(--cream);border-radius:12px;padding:12px 14px}
+.how li>span{font-size:1.5rem}
+.how b{display:block;color:var(--wine);font-weight:600}
+.how small{color:var(--soft);font-size:.86rem}
+footer{line-height:1.6}
+.msg .big{font-size:2rem;display:block;margin-bottom:6px}
 .note{font-size:.8rem;opacity:.75;margin-top:8px;min-height:1em}
 </style>
 </head>
 <body>
-<header><h1>MAVE</h1><p>Carteras · disponibilidad al día</p></header>
+<header><h1>MAVE</h1><p>Bolsas personalizadas · Carry your story ✨</p></header>
 <div class="bar">
   <input type="search" id="q" placeholder="Buscar cartera…" autocomplete="off">
   <div class="chips" id="chips"></div>
 </div>
-<main class="grid" id="grid"><div class="msg">Cargando…</div></main>
-<footer>Para pedir, escríbenos por mensaje directo en Instagram.</footer>
+<main class="grid" id="grid"><div class="msg"><span class="big">👛</span>Preparando las carteras para ti…</div></main>
+<section class="how">
+  <h2>Cómo comprar 🎀</h2>
+  <ul>
+    <li><span>👛</span><div><b>Elige tu diseño</b><small>Toca la cartera que te guste y escríbenos por Instagram.</small></div></li>
+    <li><span>✨</span><div><b>Personalízala</b><small>Cada letra adicional tiene un costo de $3.00.</small></div></li>
+    <li><span>🤍</span><div><b>Sistema de apartado</b><small>Abono desde $15 y tienes 30 días para el pago total.</small></div></li>
+  </ul>
+</section>
+<footer>MAVE · Bolsas personalizadas 🇵🇦<br>Carry your story</footer>
 
 <div id="lb" role="dialog" aria-modal="true">
   <button class="x" id="lbx" aria-label="Cerrar">×</button>
@@ -75,6 +92,7 @@ var KEY = 'sb_publishable_l7d_aPCwLSU8mdBv2jCQnQ_xAYNmWW9';
 
 var ALL = [], filter = 'disponibles', view = [], cur = -1, full = {};
 var LABEL = {disponible:'Disponible', ultimas:'Últimas unidades', agotado:'Agotado'};
+var SOON = {disponible:'Lista para ti 🤍', ultimas:'Quedan muy pocas ✨', agotado:'Se agotó, pero puedes preguntar por ella 🎀'};
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function money(n){n=Number(n);return n>0?'$'+(Math.round(n*100)/100).toFixed(n%1?2:0):''}
 function rpc(fn,body){
@@ -88,7 +106,7 @@ function apply(){
     return !q||(p.name||'').toLowerCase().indexOf(q)>-1||(p.description||'').toLowerCase().indexOf(q)>-1;
   });
   var g=document.getElementById('grid');
-  if(!view.length){g.innerHTML='<div class="msg">No hay carteras con ese filtro.</div>';return}
+  if(!view.length){g.innerHTML='<div class="msg"><span class="big">🎀</span>No encontramos carteras con esa búsqueda.<br>Prueba con otro nombre o toca “Todos”.</div>';return}
   g.innerHTML=view.map(function(p,i){
     return '<div class="card'+(p.status==='agotado'?' out':'')+'" data-i="'+i+'"><div class="ph" data-ref="'+esc(p.ref)+'">'+
       (p.thumb?'<img src="'+esc(p.thumb)+'" alt="'+esc(p.name)+'" loading="lazy">':'&#128092;')+
@@ -119,13 +137,13 @@ function open(i){
   im.innerHTML=p.thumb?'<img src="'+esc(p.thumb)+'" alt="'+esc(p.name)+'">':'<div style="font-size:90px;padding:40px;color:#fff">&#128092;</div>';
   getFull(p.ref).then(function(src){if(src&&view[cur]===p)im.innerHTML='<img src="'+esc(src)+'" alt="'+esc(p.name)+'">'});
   document.getElementById('lbd').innerHTML='<h2>'+esc(p.name)+'</h2>'+(p.description?'<div class="d">'+esc(p.description)+'</div>':'')+
-    (money(p.price)?'<div class="p">'+money(p.price)+'</div>':'')+'<div class="d b-'+p.status+'" style="color:#fff">'+LABEL[p.status]+'</div>'+
-    ((IG_USER&&p.status!=='agotado')?'<a class="ask" id="ask" href="https://ig.me/m/'+encodeURIComponent(IG_USER)+'" target="_blank" rel="noopener">Pedir por Instagram</a><div class="note" id="note"></div>':'');
+    (money(p.price)?'<div class="p">'+money(p.price)+'</div>':'')+'<div class="d b-'+p.status+'" style="color:#fff">'+LABEL[p.status]+' · '+SOON[p.status]+'</div>'+
+    ((IG_USER&&p.status!=='agotado')?'<a class="ask" id="ask" href="https://ig.me/m/'+encodeURIComponent(IG_USER)+'" target="_blank" rel="noopener">Pedir por Instagram 🎀</a><div class="note" id="note"></div>':'');
   document.getElementById('lb').classList.add('on');
   var a=document.getElementById('ask');
   if(a)a.addEventListener('click',function(){
-    var t='Hola, me interesa: '+p.name,n=document.getElementById('note');
-    try{navigator.clipboard.writeText(t);n.textContent='Mensaje copiado. Pégalo en el chat.'}catch(x){}
+    var t='Hola 🤍✨ Me interesa esta cartera: '+p.name+(money(p.price)?' ('+money(p.price)+')':'')+'. ¿Me das más información, por favor? 🎀',n=document.getElementById('note');
+    try{navigator.clipboard.writeText(t);n.textContent='Copiamos tu mensaje 🤍 Pégalo en el chat y ya estamos contigo.'}catch(x){}
   });
 }
 function close(){document.getElementById('lb').classList.remove('on');cur=-1}
@@ -143,7 +161,7 @@ document.getElementById('lb').addEventListener('touchstart',function(e){tx=e.tou
 document.getElementById('lb').addEventListener('touchend',function(e){if(tx==null)return;var d=e.changedTouches[0].clientX-tx;tx=null;if(Math.abs(d)>60)step(d<0?1:-1)});
 chips();
 rpc('public_catalog').then(function(r){ALL=r||[];apply()}).catch(function(){
-  document.getElementById('grid').innerHTML='<div class="msg">No pudimos cargar el catálogo. Intenta de nuevo en un momento.</div>';});
+  document.getElementById('grid').innerHTML='<div class="msg"><span class="big">🤍</span>No pudimos cargar el catálogo en este momento.<br>Inténtalo de nuevo en unos segundos.</div>';});
 </script>
 </body>
 </html>
