@@ -459,6 +459,7 @@
 
         <div class="panel">
           <h2>Historial de ventas</h2>
+          <div class="field" style="max-width:260px;margin-bottom:10px;"><label for="salesMonth">Filtrar por mes</label><select id="salesMonth"></select></div>
           <div class="calc-line" id="salesSummary" style="margin-bottom:10px;"></div>
           <div style="overflow-x:auto;">
           <table id="tblVentas">
@@ -1953,13 +1954,21 @@
   function renderSales(){
     const tbody = document.querySelector('#tblVentas tbody');
     tbody.innerHTML = '';
-    document.getElementById('emptyVentas').style.display = sales.length ? 'none' : 'block';
-    const tv = sales.reduce((a,x)=>a+x.totalUSD,0), tp = sales.reduce((a,x)=>a+x.profitUSD,0);
-    document.getElementById('salesSummary').innerHTML = sales.length ?
+    const mSel = document.getElementById('salesMonth');
+    const allMonths = [...new Set(sales.map(s=>String(s.date).slice(0,7)))].sort().reverse();
+    const prevM = mSel.value;
+    mSel.innerHTML = '<option value="all">Todos los meses</option>' + allMonths.map(m=>'<option value="'+m+'">'+monthLabel(m)+'</option>').join('');
+    mSel.value = (prevM === 'all' || allMonths.includes(prevM)) ? prevM : 'all';
+    const all = sales;
+    const vis = mSel.value === 'all' ? all : all.filter(s=>String(s.date).slice(0,7) === mSel.value);
+    document.getElementById('emptyVentas').style.display = vis.length ? 'none' : 'block';
+    document.getElementById('emptyVentas').textContent = all.length ? 'No hay ventas en este mes.' : 'Aún no hay ventas registradas.';
+    const tv = vis.reduce((a,x)=>a+x.totalUSD,0), tp = vis.reduce((a,x)=>a+x.profitUSD,0);
+    document.getElementById('salesSummary').innerHTML = vis.length ?
       'Vendido <b>'+fmtUSD(tv)+'</b> · Ganancia <b class="'+(tp>=0?'pos':'neg')+'">'+fmtUSD(tp)+'</b> · Margen <b>'+(tv>0?(tp/tv*100).toFixed(1):'0.0')+'%</b>' : '';
     // una fila por venta: las líneas con el mismo order_id se agrupan
     const groups = [], byOrder = {};
-    sales.forEach(s=>{
+    vis.forEach(s=>{
       if(!s.orderId){ groups.push([s]); return; }
       if(!byOrder[s.orderId]){ byOrder[s.orderId] = []; groups.push(byOrder[s.orderId]); }
       byOrder[s.orderId].push(s);
@@ -2019,12 +2028,12 @@
   function renderAdvisorChart(){
     const sel = document.getElementById('advMonth'), metricSel = document.getElementById('advMetric');
     if(!sel) return;
-    const months = [...new Set(sales.map(s=>String(s.date).slice(0,7)))].sort().reverse();
+    const months = [...new Set(vis.map(s=>String(s.date).slice(0,7)))].sort().reverse();
     const prev = sel.value;
     sel.innerHTML = '<option value="all">Todos los meses</option>' + months.map(m=>'<option value="'+m+'">'+monthLabel(m)+'</option>').join('');
     sel.value = months.includes(prev) || prev === 'all' ? prev : (months[0] || 'all');
     const metric = metricSel.value || 'total';
-    const list = sel.value === 'all' ? sales : sales.filter(s=>String(s.date).slice(0,7) === sel.value);
+    const list = sel.value === 'all' ? vis : vis.filter(s=>String(s.date).slice(0,7) === sel.value);
     const stats = advStats(list).sort((a,b)=>b[metric]-a[metric]);
     const el = document.getElementById('advChart');
     if(!stats.length){ el.innerHTML = '<p class="empty">Aún no hay ventas en este periodo.</p>'; }
@@ -2039,7 +2048,7 @@
     }
     // líder de cada mes
     document.getElementById('advLeaders').innerHTML = months.length ? '<b>Líder por mes:</b> ' + months.map(m=>{
-      const st = advStats(sales.filter(s=>String(s.date).slice(0,7) === m)).sort((a,b)=>b[metric]-a[metric])[0];
+      const st = advStats(vis.filter(s=>String(s.date).slice(0,7) === m)).sort((a,b)=>b[metric]-a[metric])[0];
       return monthLabel(m)+': <b>'+escapeHtml(st.name)+'</b> ('+(metric === 'n' ? st.n : fmtUSD(st[metric]))+')';
     }).join(' · ') : '';
   }
@@ -2051,7 +2060,7 @@
     if(!box) return;
     const today = todayLocal(), soon = addDays(today, 3);
     const items = salePayments.filter(p=>!p.paid && p.due <= soon).map(p=>{
-      const sale = sales.find(x=>x.id === p.saleId);
+      const sale = vis.find(x=>x.id === p.saleId);
       return { p, client: sale ? sale.client : '', kind: p.due < today ? 0 : (p.due === today ? 1 : 2) };
     }).sort((a,b)=>a.kind-b.kind || (a.p.due < b.p.due ? -1 : 1));
     const vb = document.querySelector('nav button[data-view="ventas"]');
@@ -2069,6 +2078,8 @@
       await refreshAllData(); renderAll(); showToast('Pago registrado.');
     }));
   }
+
+  document.getElementById('salesMonth').addEventListener('change', renderSales);
 
   /* ===================== EXPENSES ===================== */
   const expenseForm = document.getElementById('expenseForm');
