@@ -153,6 +153,7 @@
   .tag-personal{ display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:rgba(120,120,120,.18); margin-left:6px; white-space:nowrap; }
   .neg{ color: var(--danger); font-weight:600; }
   .row-actions{ display:flex; gap:8px; }
+  a.link-btn{ text-decoration:underline; display:inline-block; }
   .link-btn{ background:none; border:none; cursor:pointer; color: var(--ink-soft); font-size:13px; padding:2px 4px; }
   .link-btn:hover{ color: var(--wine); }
   .link-btn.danger:hover{ color: var(--danger); }
@@ -263,6 +264,7 @@
       <button data-view="dashboard" class="active">Panel general</button>
       <button data-view="inventario">Inventario</button>
       <button data-view="ventas">Ventas</button>
+      <button data-view="cobros">Cobros <span id="cobrosBadge"></span></button>
       <button data-view="importaciones">Importaciones</button>
       <button data-view="seguridad">Seguridad <span id="secBadge"></span></button>
       <button data-view="insumos">Insumos y gastos</button>
@@ -471,6 +473,24 @@
           </table>
           </div>
           <div class="empty-state" id="emptyVentas" style="display:none;">Aún no hay ventas registradas.</div>
+        </div>
+      </section>
+
+      <!-- ---------- COBROS ---------- -->
+      <section class="view" id="view-cobros">
+        <div class="view-header">
+          <h1>Cobros pendientes</h1>
+          <p>Clientes que han hecho abono y todavía deben el pago 1 y/o el pago 2.</p>
+        </div>
+        <div class="panel">
+          <div class="calc-line" id="cobrosSummary" style="margin-bottom:12px;"></div>
+          <div style="overflow-x:auto;">
+          <table id="tblCobros">
+            <thead><tr><th>Cliente</th><th>Venta</th><th>Cobrado / Saldo</th><th>Plan de pagos</th><th>Estado</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          </div>
+          <div class="empty-state" id="emptyCobros" style="display:none;">&#127881; No tienes cobros pendientes.</div>
         </div>
       </section>
 
@@ -762,7 +782,7 @@
   }
   function renderRowsIfIdle(){ if(!document.activeElement || !impForm.contains(document.activeElement)) renderImpRows(); }
   function renderAll(){
-    renderInventory(); renderSaleProductOptions(); renderSales(); renderAdvisorChart(); renderPayBanner(); renderExpenses();
+    renderInventory(); renderSaleProductOptions(); renderSales(); renderAdvisorChart(); renderPayBanner(); renderCobros(); renderExpenses();
     renderImports(); renderRowsIfIdle(); renderSecurity(); renderDashboard();
   }
 
@@ -1337,7 +1357,7 @@
     const allowed = {
       dashboard: me.role === 'admin' || (canView('ventas') && canView('insumos')),
       inventario: canView('inventario'),
-      ventas: canView('ventas'), insumos: canView('insumos'), importaciones: canView('importaciones'), seguridad: me.role === 'admin'
+      ventas: canView('ventas'), cobros: canView('ventas'), insumos: canView('insumos'), importaciones: canView('importaciones'), seguridad: me.role === 'admin'
     };
     let first = null;
     document.querySelectorAll('nav.sidenav button').forEach(btn=>{
@@ -2042,8 +2062,10 @@
       const pays = salePayments.filter(x=>g.some(y=>y.id === x.saleId)).sort((a,b)=>a.number-b.number);
       const paid = pays.filter(x=>x.paid).reduce((a,x)=>a+x.amount, 0);
       const next = pays.find(x=>!x.paid);
-      const payHtml = !next ? '<span class="pos">Pagado</span>' :
-        'Saldo '+fmtUSD(totalUSD - paid)+'<br><small>'+(next.number === 0 ? 'Abono' : 'Cuota '+next.number)+': '+fmtUSD(next.amount)+' · vence '+next.due+
+      const lastN = pays.length ? Math.max(...pays.map(x=>x.number)) : 0;
+      const stepLbl = next ? (next.number === 0 ? 'el abono' : 'el pago '+next.number+' de '+lastN+(next.number === lastN ? ' (último)' : '')) : '';
+      const payHtml = !next ? '<span class="pos">&#10003; Pagado completo</span>' :
+        '<b class="neg">Falta cobrar '+stepLbl+'</b><br>Saldo '+fmtUSD(totalUSD - paid)+'<br><small>'+fmtUSD(next.amount)+' · vence '+next.due+
         (next.due < todayLocal() ? ' <b class="neg">(vencida)</b>' : '')+'</small> <button class="link-btn" data-pay="'+next.id+'">Cobrar</button>';
       const prodHtml = g.length === 1 ? escapeHtml(s.productName) :
         g.map(x=>x.qty+' × '+escapeHtml(x.productName)).join('<br>');
@@ -2118,6 +2140,63 @@
   }
   ['advMonth','advMetric'].forEach(id=>{ const e = document.getElementById(id); if(e) e.addEventListener('change', renderAdvisorChart); });
 
+  /* ===================== PANEL DE COBROS PENDIENTES ===================== */
+  function renderCobros(){
+    const tbody = document.querySelector('#tblCobros tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    const today = todayLocal();
+    const groups = [], byOrder = {};
+    sales.forEach(s=>{
+      if(!s.orderId){ groups.push([s]); return; }
+      if(!byOrder[s.orderId]){ byOrder[s.orderId] = []; groups.push(byOrder[s.orderId]); }
+      byOrder[s.orderId].push(s);
+    });
+    const rows = [];
+    groups.forEach(g=>{
+      const pays = salePayments.filter(x=>g.some(y=>y.id === x.saleId)).sort((a,b)=>a.number-b.number);
+      const next = pays.find(x=>!x.paid);
+      if(!next) return;
+      const total = g.reduce((a,x)=>a+x.totalUSD,0);
+      const paid = pays.filter(x=>x.paid).reduce((a,x)=>a+x.amount,0);
+      rows.push({ g, pays, next, total, paid, kind: next.due < today ? 0 : (next.due === today ? 1 : (next.due <= addDays(today,3) ? 2 : 3)) });
+    });
+    rows.sort((a,b)=>a.kind-b.kind || (a.next.due < b.next.due ? -1 : 1));
+    const owed = rows.reduce((a,r)=>a + (r.total - r.paid), 0);
+    const late = rows.filter(r=>r.kind === 0).length;
+    document.getElementById('cobrosSummary').innerHTML = rows.length ?
+      '<b>'+rows.length+'</b> cliente'+(rows.length===1?'':'s')+' con saldo · Por cobrar <b>'+fmtUSD(owed)+'</b>' + (late ? ' · <b class="neg">'+late+' vencido'+(late===1?'':'s')+'</b>' : '') : '';
+    document.getElementById('emptyCobros').style.display = rows.length ? 'none' : 'block';
+    const ST = ['<b class="neg">VENCIDO</b>','<b style="color:var(--wine)">Vence HOY</b>','Vence pronto','Al día'];
+    rows.forEach(r=>{
+      const s = r.g[0], lastN = Math.max(...r.pays.map(x=>x.number));
+      const chips = r.pays.map(p=>{
+        const lbl = p.number === 0 ? 'Abono' : 'Pago '+p.number;
+        return p.paid ? '<div><span class="pos">&#10003; '+lbl+'</span> '+fmtUSD(p.amount)+'</div>' :
+          '<div>'+(p.id === r.next.id ? '<b>' : '')+lbl+' '+fmtUSD(p.amount)+' · '+p.due+(p.due < today ? ' <b class="neg">(vencido)</b>' : '')+(p.id === r.next.id ? '</b>' : '')+'</div>';
+      }).join('');
+      const nextLbl = r.next.number === 0 ? 'el abono' : 'el pago '+r.next.number+' de '+lastN;
+      const digits = String(s.phone||'').replace(/\D/g,''); const wa = digits ? (digits.length === 8 ? '507'+digits : digits) : '';
+      const msg = 'Hola '+(s.client||'')+', te recuerdo que está pendiente '+nextLbl+' de tu compra por '+fmtUSD(r.next.amount)+' (fecha: '+r.next.due+'). ¡Gracias!';
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td data-label="Cliente"><strong>'+escapeHtml(s.client)+'</strong>'+(s.phone?'<br><small>'+escapeHtml(s.phone)+'</small>':'')+(s.advisor?'<br><small>Asesor: '+escapeHtml(s.advisor)+'</small>':'')+'</td>'+
+        '<td data-label="Venta">'+s.date+'<br><small>'+r.g.map(x=>x.qty+' × '+escapeHtml(x.productName)).join('<br>')+'</small><br><b>'+fmtUSD(r.total)+'</b></td>'+
+        '<td data-label="Cobrado / Saldo">Cobrado '+fmtUSD(r.paid)+'<br><b class="neg">Saldo '+fmtUSD(r.total-r.paid)+'</b></td>'+
+        '<td data-label="Plan de pagos">'+chips+'</td>'+
+        '<td data-label="Estado">'+ST[r.kind]+'<br><small>Falta '+nextLbl+'</small></td>'+
+        '<td data-label=""><div class="row-actions"><button class="link-btn" data-cobrar="'+r.next.id+'">Cobrar '+(r.next.number === 0 ? 'abono' : 'pago '+r.next.number)+'</button>'+
+        (wa ? '<a class="link-btn" target="_blank" rel="noopener" href="https://wa.me/'+wa+'?text='+encodeURIComponent(msg)+'">Recordar por WhatsApp</a>' : '')+'</div></td>';
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('[data-cobrar]').forEach(b=> b.addEventListener('click', async ()=>{
+      if(!confirm('¿Registrar este pago como cobrado hoy?')) return;
+      const { error } = await sb.rpc('mark_payment', { p_payment: b.dataset.cobrar, p_paid: true, p_paid_date: todayLocal() });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
+      await refreshAllData(); renderAll(); showToast('Pago registrado.');
+    }));
+  }
+
   /* ===================== AVISO DE COBROS (cuotas a 15 y 30 días) ===================== */
   function renderPayBanner(){
     const box = document.getElementById('payBanner');
@@ -2127,8 +2206,8 @@
       const sale = sales.find(x=>x.id === p.saleId);
       return { p, client: sale ? sale.client : '', kind: p.due < today ? 0 : (p.due === today ? 1 : 2) };
     }).sort((a,b)=>a.kind-b.kind || (a.p.due < b.p.due ? -1 : 1));
-    const vb = document.querySelector('nav button[data-view="ventas"]');
-    if(vb) vb.innerHTML = 'Ventas' + (items.length ? ' <span style="background:var(--danger);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px;">'+items.length+'</span>' : '');
+    const cb = document.getElementById('cobrosBadge');
+    if(cb) cb.innerHTML = items.length ? '<span style="background:var(--danger);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px;">'+items.length+'</span>' : '';
     if(!items.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
     const LBL = ['<b class="neg">Vencida</b>','<b style="color:var(--wine)">Vence HOY</b>','Vence pronto'];
     box.innerHTML = '<b>&#128276; Cobros pendientes</b>' + items.map(it=>
