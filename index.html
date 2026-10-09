@@ -1802,16 +1802,32 @@
     return out;
   }
 
+  function stockNote(l, p){
+    if(p.stock <= 0) return '<b class="neg">⛔ Stock 0 — AGOTADO: no se puede despachar</b>';
+    if((Number(l.qty)||0) > p.stock) return '<b class="neg">Solo hay '+p.stock+' en stock</b>';
+    return 'Stock: '+p.stock;
+  }
+  function saleBlocked(){
+    const need = {};
+    saleLines.forEach(l=>{ const p = lineProduct(l); if(p) need[p.id] = (need[p.id]||0) + (Number(l.qty)||0); });
+    return Object.keys(need).some(id=>{ const p = products.find(x=>x.id === id); return p.stock <= 0 || need[id] > p.stock; });
+  }
+  function updateSaleBlock(){
+    const btn = document.querySelector('#saleForm button[type=submit]');
+    if(!btn) return;
+    const bl = saleBlocked();
+    btn.disabled = bl; btn.style.opacity = bl ? '.5' : ''; btn.title = bl ? 'Hay productos sin stock suficiente' : '';
+  }
   function renderSaleLines(){
     const tb = document.querySelector('#saleLinesTbl tbody');
     saleLines = saleLines.filter((l,i)=> true);
     document.getElementById('saleProductList').innerHTML = products.filter(x=>!x.personal)
       .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''), 'es', { sensitivity:'base', numeric:true }))
-      .map(x=>'<option value="'+escapeHtml(x.name)+'" label="Stock: '+x.stock+'"></option>').join('');
+      .map(x=>'<option value="'+escapeHtml(x.name)+'" label="'+(x.stock <= 0 ? '⛔ AGOTADO (Stock 0)' : 'Stock: '+x.stock)+'"></option>').join('');
     tb.innerHTML = saleLines.map((l,i)=>{
       const p = lineProduct(l);
       return '<tr data-i="'+i+'"><td><input data-k="pname" list="saleProductList" type="text" autocomplete="off" required placeholder="Escribe para buscar el producto" value="'+escapeHtml(p ? p.name : (l.text || ''))+'" style="min-width:230px">'+
-        (p ? '<br><small>Stock: '+p.stock+'</small>' : '')+'</td>'+
+        '<br><small data-note>'+(p ? stockNote(l, p) : '')+'</small></td>'+
         '<td><input data-k="qty" type="number" min="1" step="1" value="'+l.qty+'" style="width:70px" required></td>'+
         '<td><input data-k="price" type="number" min="0" step="0.01" value="'+(l.price === '' ? (p ? p.ventaUSD : '') : l.price)+'" placeholder="Catálogo" style="width:110px"></td>'+
         '<td data-sub>'+fmtUSD(p ? linePrice(l) * (Number(l.qty)||0) : 0)+'</td>'+
@@ -1830,6 +1846,7 @@
     l[k] = e.target.value;
     const p = lineProduct(l);
     tr.querySelector('[data-sub]').textContent = fmtUSD(p ? linePrice(l) * (Number(l.qty)||0) : 0);
+    const note = tr.querySelector('[data-note]'); if(note) note.innerHTML = p ? stockNote(l, p) : '';
     refreshSaleCalc(true);
   });
   saleLinesTbl.addEventListener('change', e=>{
@@ -1845,6 +1862,7 @@
       if(q) showToast(found.length > 1 ? 'Hay varios productos con ese texto: escribe más del nombre o elígelo de la lista.' : 'No encontré ese producto: elígelo de la lista.');
     }
     l.price = '';
+    if(found.length === 1 && found[0].stock <= 0) showToast('⛔ '+found[0].name+' está AGOTADO (stock 0). No se puede vender.');
     customRows = []; renderCustomRows(); renderSaleLines(); refreshSaleCalc();
   });
   saleLinesTbl.addEventListener('click', e=>{
@@ -1888,6 +1906,7 @@
   function refreshSaleCalc(keepRows){
     const total = saleTotalNow();
     document.getElementById('calcSaleTotal').textContent = fmtUSD(total);
+    updateSaleBlock();
     const adjEl = document.getElementById('calcSaleAdj'), listT = saleListTotal();
     if(saleFinalAmount() && Math.abs(saleFinalAmount() - listT) >= 0.005){
       const dd = Math.round((listT - saleFinalAmount())*100)/100;
