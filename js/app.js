@@ -1675,6 +1675,46 @@
     booted = true;
   }
 
+  /* ===================== INDICADOR DE CONEXIÓN ===================== */
+  (function(){
+    const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8.5 16.2a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/><path class="slash" d="M3 3l18 18"/></svg><span class="net-t"></span>';
+    const els = [document.getElementById('netStatus'), document.getElementById('netStatusLogin')].filter(Boolean);
+    els.forEach(e => e.innerHTML = ICON);
+    let state = 'ok', timer = null, first = true;
+    const TITLES = { ok:'Conectado al servidor', slow:'Conexión lenta: puede tardar en guardar', off:'Sin conexión: no se puede registrar ni guardar' };
+    function setState(s){
+      const prev = state; state = s;
+      els.forEach(e => { e.dataset.state = s; e.title = TITLES[s]; e.setAttribute('aria-label', TITLES[s]); });
+      if(!first && prev !== s){
+        if(s === 'off') showToast('Sin conexión: no se puede registrar ni guardar hasta que vuelva.');
+        else if(prev === 'off') showToast('Conexión restablecida.');
+      }
+      first = false;
+    }
+    async function check(){
+      if(!navigator.onLine){ setState('off'); return; }
+      const ctl = new AbortController(), t0 = performance.now(), to = setTimeout(()=>ctl.abort(), 8000);
+      try{
+        const r = await fetch(SUPABASE_URL + '/auth/v1/health', { headers:{ apikey: SUPABASE_ANON_KEY }, cache:'no-store', signal: ctl.signal });
+        clearTimeout(to);
+        if(!r.ok && r.status >= 500){ setState('off'); return; }
+        setState((performance.now() - t0) > 2000 ? 'slow' : 'ok');
+      }catch(e){ clearTimeout(to); setState('off'); }
+    }
+    function schedule(){ clearInterval(timer); timer = setInterval(check, 20000); }
+    window.addEventListener('online', check);
+    window.addEventListener('offline', ()=> setState('off'));
+    document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) check(); });
+    // Sin conexión no se deja guardar nada: se frena el envío de cualquier formulario
+    document.addEventListener('submit', ev => {
+      if(state === 'off' || !navigator.onLine){
+        ev.preventDefault(); ev.stopImmediatePropagation();
+        showToast('Sin conexión: no se pudo registrar. Espera a que el indicador vuelva a "En línea".');
+      }
+    }, true);
+    check(); schedule();
+  })();
+
   checkSession();
 })();
 
