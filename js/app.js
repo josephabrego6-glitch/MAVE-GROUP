@@ -702,7 +702,7 @@
 
   /* ===================== VERIFICACIÓN ANTI-ROBOT ===================== */
   // Clave PÚBLICA de Cloudflare Turnstile. Si está vacía se usa una pregunta simple.
-  const TURNSTILE_SITE_KEY = '';
+  const TURNSTILE_SITE_KEY = '0x4AAAAAAFSAsEvg8cljZyy8';
   let captchaToken = null, captchaAnswer = 0, tsWidget = null;
   function newMathCaptcha(){
     const a = 2 + Math.floor(Math.random() * 8), b = 2 + Math.floor(Math.random() * 8);
