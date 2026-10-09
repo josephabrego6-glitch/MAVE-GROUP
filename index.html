@@ -2193,6 +2193,13 @@
   ['advMonth','advMetric'].forEach(id=>{ const e = document.getElementById(id); if(e) e.addEventListener('change', renderAdvisorChart); });
 
   /* ===================== PANEL DE COBROS PENDIENTES ===================== */
+  function advOwedHtml(rows){
+    const by = {};
+    rows.forEach(r=>{ const a = (r.g[0].advisor || 'Sin asesor'); by[a] = (by[a]||0) + (r.total - r.paid); });
+    const list = Object.keys(by).sort((a,b)=>by[b]-by[a]);
+    if(!list.length) return '';
+    return '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px 16px;">'+list.map(a=>'<span>'+escapeHtml(a)+' <b>'+fmtUSD(by[a])+'</b></span>').join('')+'</div>';
+  }
   function renderCobros(){
     const tbody = document.querySelector('#tblCobros tbody');
     if(!tbody) return;
@@ -2217,7 +2224,7 @@
     const owed = rows.reduce((a,r)=>a + (r.total - r.paid), 0);
     const late = rows.filter(r=>r.kind === 0).length;
     document.getElementById('cobrosSummary').innerHTML = rows.length ?
-      '<b>'+rows.length+'</b> cliente'+(rows.length===1?'':'s')+' con saldo · Por cobrar <b>'+fmtUSD(owed)+'</b>' + (late ? ' · <b class="neg">'+late+' vencido'+(late===1?'':'s')+'</b>' : '') : '';
+      '<b>'+rows.length+'</b> cliente'+(rows.length===1?'':'s')+' con saldo · Por cobrar <b>'+fmtUSD(owed)+'</b>' + (late ? ' · <b class="neg">'+late+' vencido'+(late===1?'':'s')+'</b>' : '') + advOwedHtml(rows) : '';
     document.getElementById('emptyCobros').style.display = rows.length ? 'none' : 'block';
     const ST = ['<b class="neg">VENCIDO</b>','<b style="color:var(--wine)">Vence HOY</b>','Vence pronto','Al día'];
     rows.forEach(r=>{
