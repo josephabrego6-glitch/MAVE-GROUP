@@ -120,13 +120,13 @@ function open(i){
   getFull(p.ref).then(function(src){if(src&&view[cur]===p)im.innerHTML='<img src="'+esc(src)+'" alt="'+esc(p.name)+'">'});
   document.getElementById('lbd').innerHTML='<h2>'+esc(p.name)+'</h2>'+(p.description?'<div class="d">'+esc(p.description)+'</div>':'')+
     (money(p.price)?'<div class="p">'+money(p.price)+'</div>':'')+'<div class="d b-'+p.status+'" style="color:#fff">'+LABEL[p.status]+'</div>'+
-    ((IG_USER&&p.status!=='agotado')?'<a class="ask" id="ask" href="#">Pedir por Instagram</a><div class="note" id="note"></div>':'');
+    ((IG_USER&&p.status!=='agotado')?'<a class="ask" id="ask" href="https://ig.me/m/'+encodeURIComponent(IG_USER)+'" target="_blank" rel="noopener">Pedir por Instagram</a><div class="note" id="note"></div>':'');
   document.getElementById('lb').classList.add('on');
   var a=document.getElementById('ask');
-  if(a)a.onclick=function(e){e.preventDefault();
+  if(a)a.addEventListener('click',function(){
     var t='Hola, me interesa: '+p.name,n=document.getElementById('note');
     try{navigator.clipboard.writeText(t);n.textContent='Mensaje copiado. Pégalo en el chat.'}catch(x){}
-    window.open('https://ig.me/m/'+encodeURIComponent(IG_USER),'_blank');};
+  });
 }
 function close(){document.getElementById('lb').classList.remove('on');cur=-1}
 function step(d){if(cur<0||!view.length)return;open((cur+d+view.length)%view.length)}
