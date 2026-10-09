@@ -632,6 +632,24 @@
   </div>
 </div>
 
+<!-- ---------- Modal: editar venta ---------- -->
+<div class="modal-overlay" id="editSaleOverlay">
+  <div class="modal">
+    <h3>Editar venta</h3>
+    <form id="editSaleForm">
+      <div class="field"><label for="esClient">Cliente</label><input type="text" id="esClient" required></div>
+      <div class="field"><label for="esPhone">Teléfono</label><input type="tel" id="esPhone"></div>
+      <div class="field"><label for="esAdvisor">Asesor</label><input type="text" id="esAdvisor"></div>
+      <div class="field"><label for="esDate">Fecha de la venta</label><input type="date" id="esDate" required></div>
+      <p style="font-size:12px;color:var(--ink-soft);margin:8px 0 0;">Para cambiar productos, precios o el plan de pagos, elimina la venta y regístrala de nuevo.</p>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary" style="width:auto;">Guardar</button>
+        <button type="button" class="btn btn-ghost" id="esCancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- ---------- Modal: recortar foto ---------- -->
 <div class="modal-overlay" id="cropModalOverlay">
   <div class="modal crop-modal">
@@ -2022,10 +2040,11 @@
         '<td data-label="Ganancia USD"><span class="'+(profitUSD>=0?'pos':'neg')+'">'+fmtUSD(profitUSD)+'</span></td>' +
         '<td data-label="Margen"><span class="'+(profitUSD>=0?'pos':'neg')+'">'+(totalUSD>0?(profitUSD/totalUSD*100).toFixed(1):'0.0')+'%</span></td>' +
         '<td data-label="Pago">'+payHtml+'</td>' +
-        '<td data-label=""><button class="link-btn danger" data-delsale="'+g.map(x=>x.id).join(',')+'">Eliminar</button></td>';
+        '<td data-label=""><div class="row-actions"><button class="link-btn" data-editsale="'+g.map(x=>x.id).join(',')+'">Editar</button><button class="link-btn danger" data-delsale="'+g.map(x=>x.id).join(',')+'">Eliminar</button></div></td>';
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll('[data-delsale]').forEach(b=> b.addEventListener('click', ()=>deleteSale(b.dataset.delsale)));
+    tbody.querySelectorAll('[data-editsale]').forEach(b=> b.addEventListener('click', ()=>openEditSale(b.dataset.editsale)));
     tbody.querySelectorAll('[data-pay]').forEach(b=> b.addEventListener('click', async ()=>{
       if(!confirm('¿Registrar este pago como cobrado hoy?')) return;
       const { error } = await sb.rpc('mark_payment', { p_payment: b.dataset.pay, p_paid: true, p_paid_date: todayLocal() });
@@ -2106,6 +2125,33 @@
   }
 
   document.getElementById('salesMonth').addEventListener('change', renderSales);
+
+  /* ===================== EDITAR VENTA ===================== */
+  let editSaleIds = [];
+  function openEditSale(ids){
+    editSaleIds = String(ids).split(',');
+    const s = sales.find(x=>x.id === editSaleIds[0]);
+    if(!s) return;
+    document.getElementById('esClient').value = s.client || '';
+    document.getElementById('esPhone').value = s.phone || '';
+    document.getElementById('esAdvisor').value = s.advisor || '';
+    document.getElementById('esDate').value = s.date;
+    document.getElementById('editSaleOverlay').classList.add('active');
+  }
+  document.getElementById('esCancel').addEventListener('click', ()=> document.getElementById('editSaleOverlay').classList.remove('active'));
+  document.getElementById('editSaleForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const { error } = await sb.rpc('update_sale_info', {
+      p_sales: editSaleIds,
+      p_client: document.getElementById('esClient').value,
+      p_phone: document.getElementById('esPhone').value,
+      p_advisor: document.getElementById('esAdvisor').value,
+      p_date: document.getElementById('esDate').value
+    });
+    if(error){ console.error(error); showToast(error.message || 'No se pudo guardar la venta.'); return; }
+    document.getElementById('editSaleOverlay').classList.remove('active');
+    await refreshAllData(); renderAll(); showToast('Venta actualizada.');
+  });
 
   /* ===================== EXPENSES ===================== */
   const expenseForm = document.getElementById('expenseForm');
