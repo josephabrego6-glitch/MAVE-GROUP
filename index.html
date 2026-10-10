@@ -271,6 +271,13 @@
                 <div class="calc-line" id="saleCustomSum" style="margin-top:8px;"></div>
               </div>
               <div class="field span2">
+                <label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" id="saleDelivOn" style="width:auto;"> Incluir delivery</label>
+                <div id="saleDelivBox" style="display:none;margin-top:6px;">
+                  <input type="number" id="saleDelivery" min="0" step="0.01" placeholder="Lo que cobras por el delivery (USD)">
+                  <small>Se suma a lo que paga la clienta, pero no cuenta como ingreso ni ganancia.</small>
+                </div>
+              </div>
+              <div class="field span2">
                 <label for="saleFinal">Monto final cobrado (USD) — opcional</label>
                 <input type="number" id="saleFinal" min="0" step="0.01" placeholder="Si diste descuento, escribe lo que realmente cobraste">
                 <div class="calc-line" id="calcSaleAdj" style="display:none;margin-top:6px;"></div>
@@ -540,6 +547,6 @@
 <button type="button" class="cat-exit" id="catExit">Salir del modo cliente</button>
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js?v=11"></script>
+<script src="js/app.js?v=12"></script>
 </body>
 </html>
