@@ -1749,6 +1749,24 @@
     });
   }
 
+  function showMonthDetail(ym){
+    const box = document.getElementById('monthDetail');
+    if(box.dataset.ym === ym && box.style.display !== 'none'){ box.style.display = 'none'; box.dataset.ym = ''; return; }
+    const ss = sales.filter(x=>String(x.date).slice(0,7) === ym).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const gs = expenses.filter(x=>String(x.date).slice(0,7) === ym).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const ing = ss.reduce((a,x)=>a+x.totalUSD,0), cogs = ss.reduce((a,x)=>a+x.costoUnitario*x.qty,0), gas = gs.reduce((a,x)=>a+x.amountUSD,0), neta = ing - cogs - gas;
+    const rows = ss.map(x=>'<tr><td data-label="Fecha">'+x.date+'</td><td data-label="Producto">'+escapeHtml(x.productName)+'</td><td data-label="Cliente">'+escapeHtml(x.client)+'</td><td data-label="Cant.">'+x.qty+'</td><td data-label="Ingreso">'+fmtUSD(x.totalUSD)+'</td><td data-label="Costo">'+fmtUSD(x.costoUnitario*x.qty)+'</td><td data-label="Ganancia"><span class="'+(x.profitUSD>=0?'pos':'neg')+'">'+fmtUSD(x.profitUSD)+'</span></td></tr>').join('');
+    const grows = gs.map(g=>'<tr><td data-label="Fecha">'+g.date+'</td><td data-label="Descripción">'+escapeHtml(g.desc)+'</td><td data-label="Monto">'+fmtUSD(g.amountUSD)+'</td></tr>').join('');
+    box.innerHTML = '<h3 style="margin:18px 0 6px;">Detalle de '+monthLabel(ym)+'</h3>' +
+      '<p style="margin:0 0 8px;">Ingresos <b>'+fmtUSD(ing)+'</b> − Costo de lo vendido <b>'+fmtUSD(cogs)+'</b> − Gastos <b>'+fmtUSD(gas)+'</b> = Ganancia neta <b class="'+(neta>=0?'pos':'neg')+'">'+fmtUSD(neta)+'</b></p>' +
+      '<h4 style="margin:12px 0 4px;">Ventas ('+ss.length+')</h4><div style="overflow-x:auto;"><table><thead><tr><th>Fecha</th><th>Producto</th><th>Cliente</th><th>Cant.</th><th>Ingreso</th><th>Costo</th><th>Ganancia</th></tr></thead><tbody>'+(rows || '<tr><td colspan="7">Sin ventas.</td></tr>')+'</tbody></table></div>' +
+      '<h4 style="margin:12px 0 4px;">Gastos ('+gs.length+')</h4><div style="overflow-x:auto;"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Monto</th></tr></thead><tbody>'+(grows || '<tr><td colspan="3">Sin gastos.</td></tr>')+'</tbody></table></div>' +
+      '<button class="btn btn-ghost" id="monthDetailClose" style="width:auto;margin-top:10px;">Cerrar detalle</button>';
+    box.dataset.ym = ym; box.style.display = 'block';
+    document.getElementById('monthDetailClose').addEventListener('click', ()=>{ box.style.display = 'none'; box.dataset.ym = ''; });
+    box.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+
   function renderMonthly(){
     const tb = document.querySelector('#tblMonthly tbody');
     if(!tb) return;
@@ -1764,12 +1782,13 @@
       const r = m[ym], bruta = r.ing - r.cogs, neta = bruta - r.gas, n = r.orders.size;
       tot.n += n; tot.ing += r.ing; tot.cogs += r.cogs; tot.gas += r.gas;
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td data-label="Mes"><strong>'+monthLabel(ym)+'</strong></td><td data-label="Ventas">'+n+'</td><td data-label="Ingresos">'+fmtUSD(r.ing)+'</td><td data-label="Costo vendido">'+fmtUSD(r.cogs)+'</td>'+
+      tr.innerHTML = '<td data-label="Mes"><strong>'+monthLabel(ym)+'</strong><br><button class="link-btn" data-mdetail="'+ym+'">Ver detalle</button></td><td data-label="Ventas">'+n+'</td><td data-label="Ingresos">'+fmtUSD(r.ing)+'</td><td data-label="Costo vendido">'+fmtUSD(r.cogs)+'</td>'+
         '<td data-label="Ganancia bruta">'+fmtUSD(bruta)+'</td><td data-label="Gastos">'+fmtUSD(r.gas)+'</td>'+
         '<td data-label="Ganancia neta"><span class="'+(neta>=0?'pos':'neg')+'">'+fmtUSD(neta)+'</span></td>'+
         '<td data-label="Margen neto"><span class="'+(neta>=0?'pos':'neg')+'">'+(r.ing>0?(neta/r.ing*100).toFixed(1):'0.0')+'%</span></td>';
       tb.appendChild(tr);
     });
+    tb.querySelectorAll('[data-mdetail]').forEach(b=> b.addEventListener('click', ()=>showMonthDetail(b.dataset.mdetail)));
     if(months.length > 1){
       const bruta = tot.ing - tot.cogs, neta = bruta - tot.gas, tr = document.createElement('tr');
       tr.style.fontWeight = '700';
