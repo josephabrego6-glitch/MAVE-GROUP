@@ -1695,13 +1695,34 @@
   }
 
   /* ===================== DASHBOARD ===================== */
+  let dashPeriod = 'cur';
+  function ymLabel(ym){ const p = ym.split('-'); return MESES[Number(p[1])-1] + ' ' + p[0]; }
+  function curYM(){ return todayLocal().slice(0,7); }
+  function prevYM(){ const p = curYM().split('-').map(Number); const d = new Date(p[0], p[1]-2, 1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+  function periodYM(){ return dashPeriod === 'cur' ? curYM() : dashPeriod === 'prev' ? prevYM() : dashPeriod === 'all' ? null : dashPeriod; }
+  function fillPeriodSelect(){
+    const sel = document.getElementById('dashPeriod'); if(!sel) return;
+    const months = new Set();
+    sales.forEach(x=>months.add(String(x.date).slice(0,7))); expenses.forEach(g=>months.add(String(g.date).slice(0,7)));
+    const skip = new Set([curYM(), prevYM()]);
+    const rest = Array.from(months).filter(m=>/^\d{4}-\d{2}$/.test(m) && !skip.has(m)).sort().reverse();
+    sel.innerHTML = '<option value="cur">Este mes ('+ymLabel(curYM())+')</option><option value="prev">Mes anterior ('+ymLabel(prevYM())+')</option><option value="all">Todo el tiempo</option>' +
+      rest.map(m=>'<option value="'+m+'">'+ymLabel(m)+'</option>').join('');
+    sel.value = dashPeriod;
+  }
+  document.getElementById('dashPeriod').addEventListener('change', function(e){ dashPeriod = e.target.value; renderDashboard(); });
   function renderDashboard(){
-    const ingresos = sales.reduce((sum,s)=> sum + s.totalUSD, 0);
-    const cogs = sales.reduce((sum,s)=> sum + s.costoUnitario * s.qty, 0);
-    const gastos = expenses.reduce((sum,g)=> sum + g.amountUSD, 0);
+    fillPeriodSelect();
+    const ym = periodYM();
+    const inP = x => !ym || String(x.date).slice(0,7) === ym;
+    const sP = sales.filter(inP), eP = expenses.filter(inP);
+    const ingresos = sP.reduce((sum,s)=> sum + s.totalUSD, 0);
+    const cogs = sP.reduce((sum,s)=> sum + s.costoUnitario * s.qty, 0);
+    const gastos = eP.reduce((sum,g)=> sum + g.amountUSD, 0);
     const costos = cogs + gastos;
     const ganancia = ingresos - costos;
     const stockTotal = products.filter(p=>!p.personal).reduce((sum,p)=> sum + (Number(p.stock)||0), 0);
+    document.getElementById('dashPeriodNote').textContent = ym ? '' : 'Acumulado de todos los meses';
 
     document.getElementById('statIngresos').textContent = fmtUSD(ingresos);
     document.getElementById('statCostos').textContent = fmtUSD(costos);

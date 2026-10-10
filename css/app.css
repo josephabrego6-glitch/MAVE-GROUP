@@ -311,3 +311,8 @@ body[data-view="catalogo"] #payBanner, body[data-view="catalogo"] #authzBar{ dis
 .prop-edit{width:100%;border:1px solid var(--wine-soft);border-radius:10px;padding:10px 12px;font:inherit;background:var(--white);color:var(--ink)}
 .prop-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .prop-actions .btn{width:auto;padding:8px 16px}
+
+.dash-period{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+.dash-period label{font-weight:600;color:var(--wine)}
+.dash-period select{width:auto;min-width:220px;max-width:100%}
+#dashPeriodNote{color:var(--ink-soft);font-size:.85rem}
