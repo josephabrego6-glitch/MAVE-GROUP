@@ -1438,14 +1438,15 @@
     const tbody = document.querySelector('#tblVentas tbody');
     tbody.innerHTML = '';
     const mSel = document.getElementById('salesMonth');
-    const allMonths = [...new Set(sales.map(s=>String(s.date).slice(0,7)))].sort().reverse();
-    const prevM = mSel.value;
+    const nowM = todayLocal().slice(0,7);
+    const allMonths = [...new Set([nowM].concat(sales.map(s=>String(s.date).slice(0,7))))].sort().reverse();
+    const prevM = mSel.value || nowM;
     mSel.innerHTML = '<option value="all">Todos los meses</option>' + allMonths.map(m=>'<option value="'+m+'">'+monthLabel(m)+'</option>').join('');
-    mSel.value = (prevM === 'all' || allMonths.includes(prevM)) ? prevM : 'all';
+    mSel.value = (prevM === 'all' || allMonths.includes(prevM)) ? prevM : nowM;
     const all = sales;
     const vis = mSel.value === 'all' ? all : all.filter(s=>String(s.date).slice(0,7) === mSel.value);
     document.getElementById('emptyVentas').style.display = vis.length ? 'none' : 'block';
-    document.getElementById('emptyVentas').textContent = all.length ? 'No hay ventas en este mes.' : 'Aún no hay ventas registradas.';
+    document.getElementById('emptyVentas').textContent = all.length ? 'No hay ventas en este mes todavía.' : 'Aún no hay ventas registradas.';
     const tv = vis.reduce((a,x)=>a+x.totalUSD,0), tp = vis.reduce((a,x)=>a+x.profitUSD,0);
     document.getElementById('salesSummary').innerHTML = vis.length ?
       'Vendido <b>'+fmtUSD(tv)+'</b> · Ganancia <b class="'+(tp>=0?'pos':'neg')+'">'+fmtUSD(tp)+'</b> · Margen <b>'+(tv>0?(tp/tv*100).toFixed(1):'0.0')+'%</b>' : '';
