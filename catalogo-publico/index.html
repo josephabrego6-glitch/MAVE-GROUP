@@ -41,8 +41,8 @@ footer{text-align:center;color:var(--soft);font-size:.8rem;padding:0 16px 30px}
 .car{position:relative;width:min(92vw,520px);flex:none}
 .slides{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;border-radius:12px;background:var(--cream-deep);aspect-ratio:1/1}
 .slides::-webkit-scrollbar{display:none}
-.slide{flex:0 0 100%;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;font-size:80px}
-.slide img{width:100%;height:100%;object-fit:cover;display:block}
+.slide{flex:0 0 100%;scroll-snap-align:center;position:relative;display:flex;align-items:center;justify-content:center;font-size:80px}
+.slide img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block}
 .dots{display:flex;gap:7px;margin-top:10px;min-height:10px}
 .dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35);cursor:pointer}
 .dots i.on{background:var(--gold)}
