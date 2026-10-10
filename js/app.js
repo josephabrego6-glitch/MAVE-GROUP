@@ -1234,11 +1234,14 @@
   }
 
   function stockNote(l, p){
+    if(isRes()) return 'Reserva · stock actual: '+p.stock+' (se descuenta al entregar)';
     if(p.stock <= 0) return '<b class="neg">⛔ Stock 0 — AGOTADO: no se puede despachar</b>';
     if((Number(l.qty)||0) > p.stock) return '<b class="neg">Solo hay '+p.stock+' en stock</b>';
     return 'Stock: '+p.stock;
   }
+  const isRes = () => String(document.getElementById('salePayType').value).startsWith('res_');
   function saleBlocked(){
+    if(isRes()) return false;
     const need = {};
     saleLines.forEach(l=>{ const p = lineProduct(l); if(p) need[p.id] = (need[p.id]||0) + (Number(l.qty)||0); });
     return Object.keys(need).some(id=>{ const p = products.find(x=>x.id === id); return p.stock <= 0 || need[id] > p.stock; });
@@ -1293,7 +1296,7 @@
       if(q) showToast(found.length > 1 ? 'Hay varios productos con ese texto: escribe más del nombre o elígelo de la lista.' : 'No encontré ese producto: elígelo de la lista.');
     }
     l.price = '';
-    if(found.length === 1 && found[0].stock <= 0) showToast('⛔ '+found[0].name+' está AGOTADO (stock 0). No se puede vender.');
+    if(!isRes() && found.length === 1 && found[0].stock <= 0) showToast('⛔ '+found[0].name+' está AGOTADO (stock 0). No se puede vender.');
     customRows = []; renderCustomRows(); renderSaleLines(); refreshSaleCalc();
   });
   saleLinesTbl.addEventListener('click', e=>{
@@ -1354,7 +1357,8 @@
     const me2 = document.getElementById('calcSaleMargin');
     me2.textContent = margin.toFixed(1) + '%'; me2.style.color = profit < 0 ? 'var(--danger)' : 'var(--good)';
     const type = salePayType.value;
-    const cuotas = type === 'cuotas';
+    const resType = type.startsWith('res_');
+    const cuotas = type === 'cuotas' || resType;
     const custom = type === 'personalizado';
     document.getElementById('saleAbonoField').style.display = cuotas ? '' : 'none';
     document.getElementById('saleCustomField').style.display = custom ? '' : 'none';
@@ -1366,7 +1370,8 @@
       const rest = total - abono, c1 = Math.round(rest/2*100)/100, c2 = Math.round((rest-c1)*100)/100;
       const d = document.getElementById('saleDate').value || todayLocal();
       plan.style.display = '';
-      plan.innerHTML = 'Abono hoy <b>'+fmtUSD(abono)+'</b> · Cuota 1 <b>'+fmtUSD(c1)+'</b> ('+addDays(d,15)+') · Cuota 2 <b>'+fmtUSD(c2)+'</b> ('+addDays(d,30)+')';
+      plan.innerHTML = type === 'res_pago' ? 'RESERVA · Abono hoy <b>'+fmtUSD(abono)+'</b> · Pago completo <b>'+fmtUSD(rest)+'</b> ('+addDays(d,30)+')' :
+        (resType ? 'RESERVA · ' : '')+'Abono hoy <b>'+fmtUSD(abono)+'</b> · Cuota 1 <b>'+fmtUSD(c1)+'</b> ('+addDays(d,15)+') · Cuota 2 <b>'+fmtUSD(c2)+'</b> ('+addDays(d,30)+')';
     } else { plan.style.display = 'none'; }
 
     if(custom){
@@ -1384,7 +1389,7 @@
   }
   const salePayType = document.getElementById('salePayType');
   const saleAbono = document.getElementById('saleAbono');
-  salePayType.addEventListener('change', ()=> refreshSaleCalc());
+  salePayType.addEventListener('change', ()=>{ renderSaleLines(); refreshSaleCalc(); });
   document.getElementById('saleFinal').addEventListener('input', ()=> refreshSaleCalc(true));
   document.getElementById('saleDelivOn').addEventListener('change', ()=> refreshSaleCalc(true));
   document.getElementById('saleDelivery').addEventListener('input', ()=> refreshSaleCalc(true));
@@ -1396,6 +1401,26 @@
     e.preventDefault();
     if(saleLines.some(l=>!lineProduct(l))){ showToast('Selecciona un producto en cada línea.'); return; }
     if(saleLines.some(l=>!(Number(l.qty) >= 1))){ showToast('La cantidad debe ser al menos 1.'); return; }
+    if(isRes()){
+      if(saleLines.length !== 1){ showToast('Una reserva es de un solo producto: quita las otras líneas.'); return; }
+      const abonoR = Number(saleAbono.value), totR = salePayTotal();
+      if(!(abonoR > 0 && abonoR < totR)){ showToast('El abono debe ser mayor que 0 y menor que el total.'); return; }
+      if(saleDelivery() > 0){ showToast('El delivery no aplica a reservas: se agrega al entregar.'); return; }
+      const l0 = saleLines[0], p0 = lineProduct(l0), u0 = adjustedPrices()[0];
+      const { error: rErr } = await sb.rpc('create_reservation', {
+        p_product: p0.id, p_qty: Number(l0.qty), p_price: Math.abs(u0 - p0.ventaUSD) > 0.0001 ? u0 : null,
+        p_client: document.getElementById('saleClient').value.trim(), p_phone: document.getElementById('salePhone').value.trim(),
+        p_advisor: document.getElementById('saleAdvisor').value.trim(), p_date: document.getElementById('saleDate').value || todayLocal(),
+        p_plan: salePayType.value === 'res_pago' ? 'abono_pago' : 'abono_2pagos', p_abono: abonoR, p_days: 30 });
+      if(rErr){ console.error(rErr); showToast(rErr.message || 'No se pudo registrar la reserva.'); return; }
+      await refreshAllData();
+      saleForm.reset(); customRows = []; renderCustomRows();
+      saleLines = [{ pid:'', qty:1, price:'' }];
+      document.getElementById('saleDate').value = todayLocal();
+      document.getElementById('saleAdvisor').value = (me && me.full_name) || '';
+      renderAll(); showToast('Reserva registrada. Aparece en «Reservas» hasta que la entregues.');
+      return;
+    }
     const need = {};
     saleLines.forEach(l=>{ need[l.pid] = (need[l.pid]||0) + Number(l.qty); });
     for(const pid of Object.keys(need)){
@@ -1514,49 +1539,6 @@
   }
 
   /* ===================== RESERVAS ===================== */
-  const resForm = document.getElementById('resForm');
-  const resProdPick = () => { const q = normText(document.getElementById('resProd').value); if(!q) return null;
-    let f = products.filter(x=>!x.personal && normText(x.name) === q);
-    if(!f.length) f = products.filter(x=>!x.personal && normText(x.name).includes(q));
-    return f.length === 1 ? f[0] : null; };
-  function resTotal(){ const p = resProdPick(), pr = document.getElementById('resPrice').value; const price = pr !== '' ? Number(pr) : (p ? p.ventaUSD : 0); return Math.round(price * (Number(document.getElementById('resQty').value)||0) * 100)/100; }
-  function refreshResCalc(){
-    const total = resTotal(), abono = Number(document.getElementById('resAbono').value)||0, plan = document.getElementById('resPlan').value;
-    document.getElementById('resDaysField').style.display = plan === 'abono_pago' ? '' : 'none';
-    const el = document.getElementById('resCalc');
-    if(!(total > 0)){ el.innerHTML = 'Elige el producto para ver el total.'; return; }
-    if(!(abono > 0 && abono < total)){ el.innerHTML = 'Total <b>'+fmtUSD(total)+'</b> · el abono debe ser mayor que 0 y menor que el total.'; return; }
-    const rest = total - abono, d = document.getElementById('resDate').value || todayLocal();
-    if(plan === 'abono_pago'){ el.innerHTML = 'Total <b>'+fmtUSD(total)+'</b> · Abono hoy <b>'+fmtUSD(abono)+'</b> · Pago completo <b>'+fmtUSD(rest)+'</b> ('+addDays(d, Number(document.getElementById('resDays').value)||30)+')'; }
-    else { const c1 = Math.round(rest/2*100)/100; el.innerHTML = 'Total <b>'+fmtUSD(total)+'</b> · Abono <b>'+fmtUSD(abono)+'</b> · Pago 1 <b>'+fmtUSD(c1)+'</b> ('+addDays(d,15)+') · Pago 2 <b>'+fmtUSD(Math.round((rest-c1)*100)/100)+'</b> ('+addDays(d,30)+')'; }
-  }
-  document.getElementById('resToggle').addEventListener('click', ()=>{
-    const open = resForm.style.display === 'none';
-    resForm.style.display = open ? '' : 'none';
-    if(open){
-      document.getElementById('resProdList').innerHTML = products.filter(x=>!x.personal).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'es',{sensitivity:'base',numeric:true})).map(x=>'<option value="'+escapeHtml(x.name)+'" label="'+(x.stock <= 0 ? 'Stock 0' : 'Stock: '+x.stock)+'"></option>').join('');
-      if(!document.getElementById('resDate').value) document.getElementById('resDate').value = todayLocal();
-      if(!document.getElementById('resAdvisor').value) document.getElementById('resAdvisor').value = (me && me.full_name) || '';
-      refreshResCalc();
-    }
-  });
-  ['resProd','resQty','resPrice','resAbono','resPlan','resDays','resDate'].forEach(id=>{ const el = document.getElementById(id); el.addEventListener('input', refreshResCalc); el.addEventListener('change', refreshResCalc); });
-  resForm.addEventListener('submit', async function(e){
-    e.preventDefault();
-    const p = resProdPick();
-    if(!p){ showToast('Elige el producto de la lista.'); return; }
-    const total = resTotal(), abono = Number(document.getElementById('resAbono').value);
-    if(!(abono > 0 && abono < total)){ showToast('El abono debe ser mayor que 0 y menor que el total.'); return; }
-    const pr = document.getElementById('resPrice').value;
-    const { error } = await sb.rpc('create_reservation', {
-      p_product: p.id, p_qty: Number(document.getElementById('resQty').value), p_price: pr !== '' ? Number(pr) : null,
-      p_client: document.getElementById('resClient').value.trim(), p_phone: document.getElementById('resPhone').value.trim(),
-      p_advisor: document.getElementById('resAdvisor').value.trim(), p_date: document.getElementById('resDate').value || todayLocal(),
-      p_plan: document.getElementById('resPlan').value, p_abono: abono, p_days: Number(document.getElementById('resDays').value)||30 });
-    if(error){ console.error(error); showToast(error.message || 'No se pudo registrar la reserva.'); return; }
-    resForm.reset(); resForm.style.display = 'none';
-    await refreshAllData(); renderAll(); showToast('Reserva registrada.');
-  });
   function renderReservations(){
     const box = document.getElementById('resList'); if(!box) return;
     const active = reservations.filter(r=>r.status === 'reservada');
