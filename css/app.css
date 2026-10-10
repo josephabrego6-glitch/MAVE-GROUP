@@ -305,3 +305,9 @@ body[data-view="catalogo"] #payBanner, body[data-view="catalogo"] #authzBar{ dis
 .extra-photos .xp{position:relative;width:74px;height:74px;border-radius:8px;overflow:hidden;border:1px solid var(--wine-line);background:var(--cream-deep)}
 .extra-photos .xp img{width:100%;height:100%;object-fit:cover;display:block}
 .extra-photos .xp button{position:absolute;top:2px;right:2px;width:22px;height:22px;border:0;border-radius:50%;background:rgba(62,39,35,.75);color:#fff;font-size:14px;line-height:1;cursor:pointer}
+
+.prop{margin-top:6px;font-weight:400}
+.prop-txt{background:var(--cream);border:1px solid var(--wine-line);border-radius:10px;padding:10px 12px;line-height:1.45;white-space:pre-line}
+.prop-edit{width:100%;border:1px solid var(--wine-soft);border-radius:10px;padding:10px 12px;font:inherit;background:var(--white);color:var(--ink)}
+.prop-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.prop-actions .btn{width:auto;padding:8px 16px}

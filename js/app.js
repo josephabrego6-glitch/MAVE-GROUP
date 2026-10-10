@@ -515,7 +515,7 @@
     const T = id => document.querySelector('#'+id+' tbody');
     document.getElementById('emptyAlerts').style.display = sec.alerts.length ? 'none' : 'block';
     T('tblAlerts').innerHTML = sec.alerts.map(a=>'<tr style="'+(a.read_at?'opacity:.55':'font-weight:600')+'"><td>'+fmtDT(a.created_at)+'</td><td>'+(SEV[a.severity]||a.severity)+'</td><td>'+escapeHtml(a.kind)+'</td><td>'+escapeHtml(a.title)+
-      (a.detail ? '<br><small>'+escapeHtml(JSON.stringify(a.detail))+'</small>' : '')+'</td><td>'+(a.read_at ? '' : '<button class="link-btn" data-aread="'+a.id+'">Leída</button>')+'</td></tr>').join('');
+      (isDescAlert(a) ? descAlertHtml(a) : (a.detail ? '<br><small>'+escapeHtml(JSON.stringify(a.detail))+'</small>' : ''))+'</td><td>'+(a.read_at || isDescAlert(a) ? '' : '<button class="link-btn" data-aread="'+a.id+'">Leída</button>')+'</td></tr>').join('');
     document.getElementById('emptyReq').style.display = sec.requests.length ? 'none' : 'block';
     T('tblReq').innerHTML = sec.requests.map(r=>'<tr><td>'+fmtDT(r.created_at)+'</td><td>'+escapeHtml(r.user_email||'')+'</td><td>'+escapeHtml(MOD_NAME[r.module]||r.module)+'</td><td>'+escapeHtml(r.reason||'')+'</td><td>'+r.status+
       (r.expires_at && r.status==='aprobada' ? '<br><small>hasta '+fmtDT(r.expires_at)+'</small>' : '')+'</td><td>'+(r.status==='pendiente' ?
@@ -535,10 +535,36 @@
       document.getElementById('setStock').value = st.stock_change_units; document.getElementById('setNs').value = st.night_start; document.getElementById('setNe').value = st.night_end;
     }
   }
+  function isDescAlert(a){ return a.kind==='inventario' && /^Descripción pendiente:/.test(a.title||'') && a.detail && a.detail.propuesta && a.detail.producto_id && !a.read_at; }
+  function descAlertHtml(a){
+    return '<div class="prop"><div class="prop-txt" id="ptxt'+a.id+'">'+escapeHtml(a.detail.propuesta)+'</div>'+
+      '<textarea class="prop-edit" id="pedit'+a.id+'" rows="4" style="display:none;">'+escapeHtml(a.detail.propuesta)+'</textarea>'+
+      '<div class="prop-actions"><button class="btn" data-papprove="'+a.id+'">Aprobar</button> <button class="btn btn-ghost" data-pedit="'+a.id+'">Modificar</button> '+
+      '<button class="btn btn-ghost" data-psave="'+a.id+'" style="display:none;" id="psave'+a.id+'">Guardar cambios</button> <button class="btn btn-ghost" data-pdeny="'+a.id+'">Denegar</button></div></div>';
+  }
+  async function descDecide(alertId, mode){
+    const a = sec.alerts.find(x=>String(x.id)===String(alertId)); if(!a) return;
+    if(mode !== 'deny'){
+      const txt = mode === 'save' ? document.getElementById('pedit'+alertId).value.trim() : String(a.detail.propuesta||'').trim();
+      if(!txt){ showToast('La descripción está vacía.'); return; }
+      const { error } = await sb.from('products').update({ description: txt }).eq('id', a.detail.producto_id);
+      if(!done(error, 'Descripción guardada en la cartera.')) return;
+    } else { showToast('Propuesta denegada.'); }
+    await sb.from('alerts').update({read_at:new Date().toISOString(), read_by:me.id}).eq('id', alertId);
+    await refreshAllData(); renderAll(); secReload();
+  }
   async function secReload(){ await fetchSecurity(); renderSecurity(); }
   const done = (error, ok) => { if(error){ console.error(error); showToast(error.message || 'No se pudo completar la acción.'); } else showToast(ok); return !error; };
   document.getElementById('view-seguridad').addEventListener('click', async function(e){
     const d = e.target.dataset;
+    if(d.papprove){ descDecide(d.papprove,'approve'); return; }
+    if(d.pdeny){ descDecide(d.pdeny,'deny'); return; }
+    if(d.psave){ descDecide(d.psave,'save'); return; }
+    if(d.pedit){
+      const t = document.getElementById('pedit'+d.pedit), v = document.getElementById('ptxt'+d.pedit), b = document.getElementById('psave'+d.pedit);
+      const show = t.style.display === 'none'; t.style.display = show ? '' : 'none'; v.style.display = show ? 'none' : ''; b.style.display = show ? '' : 'none'; if(show) t.focus();
+      return;
+    }
     if(d.aread){ await sb.from('alerts').update({read_at:new Date().toISOString(), read_by:me.id}).eq('id', d.aread); secReload(); }
     if(d.aprob || d.deny){
       const id = d.aprob || d.deny, mins = Number(document.querySelector('[data-min="'+id+'"]').value);
