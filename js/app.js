@@ -18,6 +18,7 @@
   let products = [];
   let sales = [];
   let deliveryPayouts = [];
+  let reservations = [], resPayments = [];
   let salePayments = [];
   let expenses = [];
 
@@ -78,13 +79,18 @@
   }
   async function refreshAllData(){
     [products, sales, expenses, salePayments] = await Promise.all([fetchProducts(), fetchSales(), fetchExpenses(), fetchSalePayments()]);
+    try{
+      const [r1, r2] = await Promise.all([sb.from('reservations').select('*').order('created_at',{ascending:false}), sb.from('reservation_payments').select('*').order('number',{ascending:true})]);
+      reservations = (r1.data||[]).map(r=>({ id:r.id, productId:r.product_id, productName:r.product_name, qty:r.qty, price:Number(r.unit_price), client:r.client, phone:r.contact_phone, advisor:r.advisor, date:r.date, plan:r.plan, status:r.status }));
+      resPayments = (r2.data||[]).map(r=>({ id:r.id, resId:r.reservation_id, number:r.number, due:r.due_date, amount:Number(r.amount), paid:r.paid }));
+    }catch(e){ reservations = []; resPayments = []; }
     try{ const {data} = await sb.from('delivery_payouts').select('*').order('created_at',{ascending:false}); deliveryPayouts = (data||[]).map(r=>({ id:r.id, advisor:r.advisor, amount:Number(r.amount), date:r.paid_date, note:r.note })); }catch(e){ deliveryPayouts = []; }
     await fetchImportData();
     await fetchSecurity();
   }
   function renderRowsIfIdle(){ if(!document.activeElement || !impForm.contains(document.activeElement)) renderImpRows(); }
   function renderAll(){
-    renderInventory(); renderSaleProductOptions(); renderSales(); renderDelivery(); renderAdvisorChart(); renderPayBanner(); renderCobros(); renderExpenses();
+    renderInventory(); renderSaleProductOptions(); renderSales(); renderReservations(); renderDelivery(); renderAdvisorChart(); renderPayBanner(); renderCobros(); renderExpenses();
     renderImports(); renderRowsIfIdle(); renderSecurity(); renderDashboard(); renderCatalog();
   }
 
@@ -1504,6 +1510,85 @@
       const { error } = await sb.rpc('mark_payment', { p_payment: b.dataset.pay, p_paid: true, p_paid_date: todayLocal() });
       if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
       await refreshAllData(); renderAll(); showToast('Pago registrado.');
+    }));
+  }
+
+  /* ===================== RESERVAS ===================== */
+  const resForm = document.getElementById('resForm');
+  const resProdPick = () => { const q = normText(document.getElementById('resProd').value); if(!q) return null;
+    let f = products.filter(x=>!x.personal && normText(x.name) === q);
+    if(!f.length) f = products.filter(x=>!x.personal && normText(x.name).includes(q));
+    return f.length === 1 ? f[0] : null; };
+  function resTotal(){ const p = resProdPick(), pr = document.getElementById('resPrice').value; const price = pr !== '' ? Number(pr) : (p ? p.ventaUSD : 0); return Math.round(price * (Number(document.getElementById('resQty').value)||0) * 100)/100; }
+  function refreshResCalc(){
+    const total = resTotal(), abono = Number(document.getElementById('resAbono').value)||0, plan = document.getElementById('resPlan').value;
+    document.getElementById('resDaysField').style.display = plan === 'abono_pago' ? '' : 'none';
+    const el = document.getElementById('resCalc');
+    if(!(total > 0)){ el.innerHTML = 'Elige el producto para ver el total.'; return; }
+    if(!(abono > 0 && abono < total)){ el.innerHTML = 'Total <b>'+fmtUSD(total)+'</b> · el abono debe ser mayor que 0 y menor que el total.'; return; }
+    const rest = total - abono, d = document.getElementById('resDate').value || todayLocal();
+    if(plan === 'abono_pago'){ el.innerHTML = 'Total <b>'+fmtUSD(total)+'</b> · Abono hoy <b>'+fmtUSD(abono)+'</b> · Pago completo <b>'+fmtUSD(rest)+'</b> ('+addDays(d, Number(document.getElementById('resDays').value)||30)+')'; }
+    else { const c1 = Math.round(rest/2*100)/100; el.innerHTML = 'Total <b>'+fmtUSD(total)+'</b> · Abono <b>'+fmtUSD(abono)+'</b> · Pago 1 <b>'+fmtUSD(c1)+'</b> ('+addDays(d,15)+') · Pago 2 <b>'+fmtUSD(Math.round((rest-c1)*100)/100)+'</b> ('+addDays(d,30)+')'; }
+  }
+  document.getElementById('resToggle').addEventListener('click', ()=>{
+    const open = resForm.style.display === 'none';
+    resForm.style.display = open ? '' : 'none';
+    if(open){
+      document.getElementById('resProdList').innerHTML = products.filter(x=>!x.personal).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'es',{sensitivity:'base',numeric:true})).map(x=>'<option value="'+escapeHtml(x.name)+'" label="'+(x.stock <= 0 ? 'Stock 0' : 'Stock: '+x.stock)+'"></option>').join('');
+      if(!document.getElementById('resDate').value) document.getElementById('resDate').value = todayLocal();
+      if(!document.getElementById('resAdvisor').value) document.getElementById('resAdvisor').value = (me && me.full_name) || '';
+      refreshResCalc();
+    }
+  });
+  ['resProd','resQty','resPrice','resAbono','resPlan','resDays','resDate'].forEach(id=>{ const el = document.getElementById(id); el.addEventListener('input', refreshResCalc); el.addEventListener('change', refreshResCalc); });
+  resForm.addEventListener('submit', async function(e){
+    e.preventDefault();
+    const p = resProdPick();
+    if(!p){ showToast('Elige el producto de la lista.'); return; }
+    const total = resTotal(), abono = Number(document.getElementById('resAbono').value);
+    if(!(abono > 0 && abono < total)){ showToast('El abono debe ser mayor que 0 y menor que el total.'); return; }
+    const pr = document.getElementById('resPrice').value;
+    const { error } = await sb.rpc('create_reservation', {
+      p_product: p.id, p_qty: Number(document.getElementById('resQty').value), p_price: pr !== '' ? Number(pr) : null,
+      p_client: document.getElementById('resClient').value.trim(), p_phone: document.getElementById('resPhone').value.trim(),
+      p_advisor: document.getElementById('resAdvisor').value.trim(), p_date: document.getElementById('resDate').value || todayLocal(),
+      p_plan: document.getElementById('resPlan').value, p_abono: abono, p_days: Number(document.getElementById('resDays').value)||30 });
+    if(error){ console.error(error); showToast(error.message || 'No se pudo registrar la reserva.'); return; }
+    resForm.reset(); resForm.style.display = 'none';
+    await refreshAllData(); renderAll(); showToast('Reserva registrada.');
+  });
+  function renderReservations(){
+    const box = document.getElementById('resList'); if(!box) return;
+    const active = reservations.filter(r=>r.status === 'reservada');
+    if(!active.length){ box.innerHTML = '<div class="empty-state">No hay reservas activas.</div>'; return; }
+    box.innerHTML = '<div style="overflow-x:auto;"><table><thead><tr><th>Fecha</th><th>Producto</th><th>Cliente</th><th>Total</th><th>Abonado</th><th>Saldo / próximo pago</th><th></th></tr></thead><tbody>' +
+      active.map(r=>{
+        const pays = resPayments.filter(x=>x.resId === r.id).sort((a,b)=>a.number-b.number);
+        const total = r.price * r.qty, paid = pays.filter(x=>x.paid).reduce((a,x)=>a+x.amount,0), next = pays.find(x=>!x.paid);
+        const prod = products.find(x=>x.id === r.productId), canDeliver = prod && prod.stock >= r.qty;
+        return '<tr><td data-label="Fecha">'+r.date+'</td><td data-label="Producto">'+r.qty+' × '+escapeHtml(r.productName)+'</td>' +
+          '<td data-label="Cliente">'+escapeHtml(r.client)+(r.phone ? '<br><small>'+escapeHtml(r.phone)+'</small>' : '')+(r.advisor ? '<br><small>Asesor: '+escapeHtml(r.advisor)+'</small>' : '')+'</td>' +
+          '<td data-label="Total">'+fmtUSD(total)+'</td><td data-label="Abonado">'+fmtUSD(paid)+'</td>' +
+          '<td data-label="Saldo">'+(next ? '<b class="neg">Saldo '+fmtUSD(total-paid)+'</b><br><small>'+fmtUSD(next.amount)+' · vence '+next.due+(next.due < todayLocal() ? ' <b class="neg">(vencida)</b>' : '')+'</small> <button class="link-btn" data-respay="'+next.id+'">Cobrar</button>' : '<span class="pos">&#10003; Pagada completa</span>')+'</td>' +
+          '<td data-label=""><div class="row-actions"><button class="link-btn" data-resdeliver="'+r.id+'"'+(canDeliver ? '' : ' title="Aún no hay stock suficiente"')+'>Entregar</button><button class="link-btn danger" data-rescancel="'+r.id+'">Cancelar</button></div>'+(canDeliver ? '' : '<small>Sin stock aún</small>')+'</td></tr>';
+      }).join('') + '</tbody></table></div><p style="font-size:12px;color:var(--ink-soft);margin:8px 0 0;">Al entregar se convierte en una venta (descuenta stock y cuenta como ingreso ese día) y los abonos pasan con ella.</p>';
+    box.querySelectorAll('[data-respay]').forEach(b=> b.addEventListener('click', async ()=>{
+      if(!confirm('¿Registrar este pago como cobrado hoy?')) return;
+      const { error } = await sb.rpc('mark_reservation_payment', { p_payment: b.dataset.respay, p_paid: true, p_paid_date: todayLocal() });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
+      await refreshAllData(); renderAll(); showToast('Pago registrado.');
+    }));
+    box.querySelectorAll('[data-resdeliver]').forEach(b=> b.addEventListener('click', async ()=>{
+      if(!confirm('¿Entregar esta reserva? Se registrará como venta de hoy y se descontará del stock.')) return;
+      const { error } = await sb.rpc('deliver_reservation', { p_id: b.dataset.resdeliver, p_date: todayLocal() });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo entregar la reserva.'); return; }
+      await refreshAllData(); renderAll(); showToast('Reserva entregada y registrada como venta.');
+    }));
+    box.querySelectorAll('[data-rescancel]').forEach(b=> b.addEventListener('click', async ()=>{
+      if(!confirm('¿Cancelar esta reserva? Los abonos recibidos hay que devolverlos a la clienta por fuera del panel.')) return;
+      const { error } = await sb.rpc('cancel_reservation', { p_id: b.dataset.rescancel });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo cancelar.'); return; }
+      await refreshAllData(); renderAll(); showToast('Reserva cancelada.');
     }));
   }
 

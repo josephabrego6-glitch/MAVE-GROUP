@@ -292,6 +292,32 @@
           </form>
         </div>
 
+        <div class="panel" id="resPanel">
+          <h2>Reservas <small style="font-weight:400;">(clientas que apartan antes de comprar al proveedor)</small></h2>
+          <button type="button" class="btn btn-primary" id="resToggle" style="width:auto;">Reserva: abono + pago completo o abono + 2 pagos</button>
+          <form id="resForm" style="display:none;margin-top:14px;">
+            <div class="form-grid">
+              <div class="field span2"><label for="resProd">Producto</label>
+                <input type="text" id="resProd" list="resProdList" autocomplete="off" required placeholder="Escribe para buscar el producto">
+                <datalist id="resProdList"></datalist></div>
+              <div class="field"><label for="resQty">Cantidad</label><input type="number" id="resQty" min="1" step="1" value="1" required></div>
+              <div class="field"><label for="resPrice">Precio unitario (USD)</label><input type="number" id="resPrice" min="0" step="0.01" placeholder="Catálogo"></div>
+              <div class="field"><label for="resClient">Cliente</label><input type="text" id="resClient" required placeholder="Nombre de la clienta"></div>
+              <div class="field"><label for="resPhone">Teléfono</label><input type="tel" id="resPhone" placeholder="+507 6000-0000"></div>
+              <div class="field"><label for="resAdvisor">Asesor</label><input type="text" id="resAdvisor"></div>
+              <div class="field"><label for="resDate">Fecha de reserva</label><input type="date" id="resDate" required></div>
+              <div class="field"><label for="resPlan">Plan de pago</label><select id="resPlan">
+                <option value="abono_pago">Abono + pago completo</option>
+                <option value="abono_2pagos">Abono + 2 pagos (a 15 y 30 días)</option></select></div>
+              <div class="field"><label for="resAbono">Abono hoy (USD)</label><input type="number" id="resAbono" min="0" step="0.01" required placeholder="0.00"></div>
+              <div class="field" id="resDaysField"><label for="resDays">Pago completo vence en (días)</label><input type="number" id="resDays" min="1" step="1" value="30"></div>
+              <div class="field span2"><div class="calc-line" id="resCalc"></div></div>
+            </div>
+            <div class="form-actions"><button type="submit" class="btn btn-primary" style="width:auto;">Registrar reserva</button></div>
+          </form>
+          <div id="resList" style="margin-top:14px;"></div>
+        </div>
+
         <div class="panel">
           <h2>Delivery por asesor</h2>
           <p style="font-size:13px;color:var(--ink-soft);margin:0 0 10px;">Lo que cobras de delivery se acumula al asesor de cada venta. Al pagarlo, se rebaja de su saldo.</p>
@@ -553,6 +579,6 @@
 <button type="button" class="cat-exit" id="catExit">Salir del modo cliente</button>
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js?v=13"></script>
+<script src="js/app.js?v=14"></script>
 </body>
 </html>
