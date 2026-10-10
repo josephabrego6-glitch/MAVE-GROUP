@@ -141,7 +141,7 @@ function getExtras(ref){
   if(extras[ref]!==undefined)return Promise.resolve(extras[ref]);
   return rpc('public_catalog_extras',{p_ref:ref}).then(function(a){extras[ref]=Array.isArray(a)?a:[];return extras[ref]}).catch(function(){return []});
 }
-function slideHtml(src,alt){return '<div class="slide">'+(src?'<img src="'+esc(src)+'" alt="'+esc(alt)+'">':'&#128092;')+'</div>'}
+function slideHtml(src,alt){return '<div class="slide">'+(src?'<img src="'+esc(src)+'" alt="'+esc(alt)+'" onerror="var s=this.parentNode;if(s.parentNode.children.length>1){s.parentNode.removeChild(s);setDots()}">':'&#128092;')+'</div>'}
 function setDots(){
   var n=document.querySelectorAll('.slide').length, car=document.getElementById('car'), sl=document.getElementById('slides');
   slideN=n; car.className='car'+(n<2?' one':'');
@@ -156,7 +156,7 @@ function open(i){
   getFull(p.ref).then(function(src){if(src&&view[cur]===p){var f=sl.firstChild;if(f)f.outerHTML=slideHtml(src,p.name)}});
   getExtras(p.ref).then(function(list){
     if(view[cur]!==p)return;
-    sl.insertAdjacentHTML('beforeend',list.map(function(x,j){return slideHtml(x,p.name+' foto '+(j+2))}).join(''));setDots();
+    sl.insertAdjacentHTML('beforeend',list.filter(function(x){return typeof x==='string'&&x.length>20}).map(function(x,j){return slideHtml(x,p.name+' foto '+(j+2))}).join(''));setDots();
   });
   document.getElementById('lbd').innerHTML='<h2>'+esc(p.name)+'</h2>'+(p.description?'<div class="d">'+esc(p.description)+'</div>':'')+
     (money(p.price)?'<div class="p">'+money(p.price)+'</div>':'')+'<div class="d b-'+p.status+'" style="color:#fff">'+LABEL[p.status]+' · '+SOON[p.status]+'</div>'+
