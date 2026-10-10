@@ -17,6 +17,7 @@
 
   let products = [];
   let sales = [];
+  let deliveryPayouts = [];
   let salePayments = [];
   let expenses = [];
 
@@ -77,12 +78,13 @@
   }
   async function refreshAllData(){
     [products, sales, expenses, salePayments] = await Promise.all([fetchProducts(), fetchSales(), fetchExpenses(), fetchSalePayments()]);
+    try{ const {data} = await sb.from('delivery_payouts').select('*').order('created_at',{ascending:false}); deliveryPayouts = (data||[]).map(r=>({ id:r.id, advisor:r.advisor, amount:Number(r.amount), date:r.paid_date, note:r.note })); }catch(e){ deliveryPayouts = []; }
     await fetchImportData();
     await fetchSecurity();
   }
   function renderRowsIfIdle(){ if(!document.activeElement || !impForm.contains(document.activeElement)) renderImpRows(); }
   function renderAll(){
-    renderInventory(); renderSaleProductOptions(); renderSales(); renderAdvisorChart(); renderPayBanner(); renderCobros(); renderExpenses();
+    renderInventory(); renderSaleProductOptions(); renderSales(); renderDelivery(); renderAdvisorChart(); renderPayBanner(); renderCobros(); renderExpenses();
     renderImports(); renderRowsIfIdle(); renderSecurity(); renderDashboard(); renderCatalog();
   }
 
@@ -1502,6 +1504,39 @@
       const { error } = await sb.rpc('mark_payment', { p_payment: b.dataset.pay, p_paid: true, p_paid_date: todayLocal() });
       if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
       await refreshAllData(); renderAll(); showToast('Pago registrado.');
+    }));
+  }
+
+  /* ===================== DELIVERY POR ASESOR ===================== */
+  function renderDelivery(){
+    const box = document.getElementById('deliveryBox'); if(!box) return;
+    const key = a => String(a||'').trim().toLowerCase();
+    const by = {};
+    const get = a => by[key(a)] || (by[key(a)] = { name: String(a||'').trim() || 'Sin asesor', earned:0, paid:0, n:0 });
+    sales.forEach(x=>{ if(x.delivery > 0){ const r = get(x.advisor); r.earned += x.delivery; r.n++; } });
+    deliveryPayouts.forEach(p=>{ get(p.advisor).paid += p.amount; });
+    const rows = Object.keys(by).map(k=>by[k]).sort((a,b)=>(b.earned-b.paid)-(a.earned-a.paid));
+    if(!rows.length){ box.innerHTML = '<div class="empty-state">Aún no hay deliveries registrados.</div>'; return; }
+    box.innerHTML = '<div style="overflow-x:auto;"><table><thead><tr><th>Asesor</th><th>Deliveries</th><th>Acumulado</th><th>Pagado</th><th>Saldo por cobrar</th><th></th></tr></thead><tbody>' +
+      rows.map(r=>{ const bal = Math.round((r.earned-r.paid)*100)/100;
+        return '<tr><td data-label="Asesor"><strong>'+escapeHtml(r.name)+'</strong></td><td data-label="Deliveries">'+r.n+'</td><td data-label="Acumulado">'+fmtUSD(r.earned)+'</td><td data-label="Pagado">'+fmtUSD(r.paid)+'</td>' +
+          '<td data-label="Saldo"><b class="'+(bal>0?'neg':'pos')+'">'+fmtUSD(bal)+'</b></td>' +
+          '<td data-label="">'+(bal > 0.004 ? '<button class="link-btn" data-delpay="'+escapeHtml(r.name === 'Sin asesor' ? '' : r.name)+'" data-bal="'+bal+'">Marcar pagado</button>' : '<span class="pos">&#10003; Al día</span>')+'</td></tr>'; }).join('') +
+      '</tbody></table></div>' +
+      (deliveryPayouts.length ? '<h4 style="margin:14px 0 4px;">Pagos de delivery registrados</h4><div style="overflow-x:auto;"><table><thead><tr><th>Fecha</th><th>Asesor</th><th>Monto</th><th></th></tr></thead><tbody>' +
+        deliveryPayouts.map(p=>'<tr><td data-label="Fecha">'+p.date+'</td><td data-label="Asesor">'+escapeHtml(p.advisor||'Sin asesor')+'</td><td data-label="Monto">'+fmtUSD(p.amount)+'</td><td><button class="link-btn danger" data-delundo="'+p.id+'">Anular</button></td></tr>').join('') + '</tbody></table></div>' : '');
+    box.querySelectorAll('[data-delpay]').forEach(b=> b.addEventListener('click', async ()=>{
+      const name = b.dataset.delpay, bal = Number(b.dataset.bal);
+      if(!confirm('¿Marcar como pagado el delivery de '+(name||'Sin asesor')+' por '+fmtUSD(bal)+'? Su saldo quedará en $0.00.')) return;
+      const { error } = await sb.rpc('pay_delivery', { p_advisor: name, p_amount: bal, p_date: todayLocal(), p_note: null });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
+      await refreshAllData(); renderAll(); showToast('Delivery pagado.');
+    }));
+    box.querySelectorAll('[data-delundo]').forEach(b=> b.addEventListener('click', async ()=>{
+      if(!confirm('¿Anular este pago? El monto vuelve al saldo pendiente del asesor.')) return;
+      const { error } = await sb.from('delivery_payouts').delete().eq('id', b.dataset.delundo);
+      if(error){ console.error(error); showToast('No se pudo anular el pago.'); return; }
+      await refreshAllData(); renderAll(); showToast('Pago anulado.');
     }));
   }
 
