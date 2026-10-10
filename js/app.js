@@ -56,7 +56,7 @@
   }
   /* ===================== DATA LOADING ===================== */
   async function fetchProducts(){
-    const {data, error} = await sb.from('products').select('*').order('created_at', {ascending:true});
+    const {data, error} = await sb.from('products').select('id,photo,name,description,precio_mxn,tasa,export_cost,costo_usd,venta_usd,stock,personal_use,created_at').order('created_at', {ascending:true});
     if(error){ console.error(error); showToast('No se pudo cargar el inventario.'); return []; }
     return data.map(rowToProduct);
   }
@@ -847,6 +847,44 @@
 
   /* ===================== PRODUCT FORM ===================== */
   let currentPhotoData = '';
+  let extraPhotos = [], extraDirty = false;
+  const MAX_EXTRA = 4;
+  function resizeTo(dataUrl, maxDim, q){
+    return new Promise(function(resolve){
+      const img = new Image();
+      img.onload = function(){
+        let w = img.width, h = img.height;
+        if(w > h && w > maxDim){ h = Math.round(h*maxDim/w); w = maxDim; }
+        else if(h > maxDim){ w = Math.round(w*maxDim/h); h = maxDim; }
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg', q));
+      };
+      img.onerror = function(){ resolve(null); };
+      img.src = dataUrl;
+    });
+  }
+  function renderExtra(){
+    const box = document.getElementById('extraPhotos');
+    box.innerHTML = extraPhotos.map(function(src,i){
+      return '<div class="xp"><img src="'+src+'" alt=""><button type="button" data-i="'+i+'" aria-label="Quitar foto">&times;</button></div>';
+    }).join('');
+    document.getElementById('prodExtra').style.display = extraPhotos.length >= MAX_EXTRA ? 'none' : '';
+  }
+  document.getElementById('extraPhotos').addEventListener('click', function(e){
+    const b = e.target.closest('button[data-i]'); if(!b) return;
+    extraPhotos.splice(+b.getAttribute('data-i'),1); extraDirty = true; renderExtra();
+  });
+  document.getElementById('prodExtra').addEventListener('change', async function(e){
+    const files = Array.from(e.target.files || []).slice(0, MAX_EXTRA - extraPhotos.length);
+    e.target.value = '';
+    for(const f of files){
+      const data = await new Promise(function(res){ const r = new FileReader(); r.onload = function(){ res(r.result); }; r.onerror = function(){ res(null); }; r.readAsDataURL(f); });
+      const out = data ? await resizeTo(data, 800, 0.78) : null;
+      if(out){ extraPhotos.push(out); extraDirty = true; }
+    }
+    renderExtra();
+  });
   const photoPreview = document.getElementById('photoPreview');
   /* ===== Recorte de foto: proporción a elección, arrastrar y zoom ===== */
   const cropOverlay = document.getElementById('cropModalOverlay');
@@ -994,6 +1032,7 @@
     document.getElementById('prodTasa').value = '18.00';
     document.getElementById('prodExport').value = '5.00';
     currentPhotoData = '';
+    extraPhotos = []; extraDirty = false; renderExtra();
     photoPreview.innerHTML = '&#128247;';
     document.getElementById('btnRecrop').style.display = 'none';
     document.getElementById('prodFormTitle').textContent = 'Nueva cartera';
@@ -1028,6 +1067,7 @@
     let error;
     const row = productToRow(product);
     if(!existing || currentPhotoData){ row.photo_thumb = await makeThumb(photo); }
+    if(extraDirty){ row.extra_photos = extraPhotos; }
     if(existing){
       ({ error } = await sb.from('products').update(row).eq('id', existing.id));
     } else {
@@ -1056,6 +1096,10 @@
     currentPhotoData = p.photo || '';
     photoPreview.innerHTML = p.photo ? '<img src="'+p.photo+'" alt="preview">' : '&#128247;';
     document.getElementById('btnRecrop').style.display = p.photo ? '' : 'none';
+    extraPhotos = []; extraDirty = false; renderExtra();
+    sb.from('products').select('extra_photos').eq('id', p.id).maybeSingle().then(function(r){
+      if(r && r.data && Array.isArray(r.data.extra_photos) && document.getElementById('prodId').value === p.id){ extraPhotos = r.data.extra_photos.slice(0, MAX_EXTRA); renderExtra(); }
+    });
     document.getElementById('prodFormTitle').textContent = 'Editar cartera';
     document.getElementById('prodSubmitBtn').textContent = 'Actualizar producto';
     prodCancelBtn.style.display = 'inline-flex';

@@ -300,3 +300,8 @@ img, canvas, svg{ max-width:100%; }
 body.client-mode .cat-exit{ display:block; }
 body.client-mode .topbar, body.client-mode nav.sidenav, body.client-mode #payBanner, body.client-mode #authzBar, body.client-mode .cat-bar .cat-opt, body.client-mode #catClient, body.client-mode #catThumbs{ display:none !important; }
 body[data-view="catalogo"] #payBanner, body[data-view="catalogo"] #authzBar{ display:none !important; }
+
+.extra-photos{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.extra-photos .xp{position:relative;width:74px;height:74px;border-radius:8px;overflow:hidden;border:1px solid var(--wine-line);background:var(--cream-deep)}
+.extra-photos .xp img{width:100%;height:100%;object-fit:cover;display:block}
+.extra-photos .xp button{position:absolute;top:2px;right:2px;width:22px;height:22px;border:0;border-radius:50%;background:rgba(62,39,35,.75);color:#fff;font-size:14px;line-height:1;cursor:pointer}
