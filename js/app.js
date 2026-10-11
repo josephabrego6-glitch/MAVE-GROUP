@@ -1359,7 +1359,7 @@
     const me2 = document.getElementById('calcSaleMargin');
     me2.textContent = margin.toFixed(1) + '%'; me2.style.color = profit < 0 ? 'var(--danger)' : 'var(--good)';
     const type = salePayType.value;
-    const resType = type.startsWith('res_');
+    const resType = isRes();
     const cuotas = type === 'cuotas' || resType;
     const custom = type === 'personalizado';
     document.getElementById('saleAbonoField').style.display = cuotas ? '' : 'none';
@@ -1372,7 +1372,7 @@
       const rest = total - abono, c1 = Math.round(rest/2*100)/100, c2 = Math.round((rest-c1)*100)/100;
       const d = document.getElementById('saleDate').value || todayLocal();
       plan.style.display = '';
-      plan.innerHTML = type === 'res_pago' ? 'RESERVA · Abono hoy <b>'+fmtUSD(abono)+'</b> · Pago completo <b>'+fmtUSD(rest)+'</b> ('+addDays(d,30)+')' :
+      plan.innerHTML = (resType && type !== 'cuotas') ? 'RESERVA · Abono hoy <b>'+fmtUSD(abono)+'</b> · Pago completo <b>'+fmtUSD(rest)+'</b> ('+addDays(d,30)+')' :
         (resType ? 'RESERVA · ' : '')+'Abono hoy <b>'+fmtUSD(abono)+'</b> · Cuota 1 <b>'+fmtUSD(c1)+'</b> ('+addDays(d,15)+') · Cuota 2 <b>'+fmtUSD(c2)+'</b> ('+addDays(d,30)+')';
     } else { plan.style.display = 'none'; }
 
@@ -1393,9 +1393,9 @@
   const saleAbono = document.getElementById('saleAbono');
   function syncResMode(){
     const on = isRes();
-    salePayType.innerHTML = on
-      ? '<option value="res_pago">Abono + pago completo (a 30 días)</option><option value="res_2pagos">Abono + 2 pagos (a 15 y 30 días)</option>'
-      : '<option value="total">Pago total</option><option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>' + (editingSale ? '<option value="personalizado">Pagos personalizados (monto y fecha de cada pago)</option>' : '');
+    const keep = salePayType.value;
+    salePayType.innerHTML = '<option value="total">Pago total</option><option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>' + (editingSale ? '<option value="personalizado">Pagos personalizados (monto y fecha de cada pago)</option>' : '');
+    if(Array.from(salePayType.options).some(o=>o.value === keep)) salePayType.value = keep;
     const dl = document.getElementById('saleDelivOn'); if(dl){ dl.checked = false; dl.closest('.field').style.display = on ? 'none' : ''; }
     renderSaleLines(); refreshSaleCalc();
   }
@@ -1422,7 +1422,7 @@
         p_product: p0.id, p_qty: Number(l0.qty), p_price: Math.abs(u0 - p0.ventaUSD) > 0.0001 ? u0 : null,
         p_client: document.getElementById('saleClient').value.trim(), p_phone: document.getElementById('salePhone').value.trim(),
         p_advisor: document.getElementById('saleAdvisor').value.trim(), p_date: document.getElementById('saleDate').value || todayLocal(),
-        p_plan: salePayType.value === 'res_pago' ? 'abono_pago' : 'abono_2pagos', p_abono: abonoR, p_days: 30 });
+        p_plan: salePayType.value === 'cuotas' ? 'abono_2pagos' : 'abono_pago', p_abono: abonoR, p_days: 30 });
       if(rErr){ console.error(rErr); showToast(rErr.message || 'No se pudo registrar la reserva.'); return; }
       await refreshAllData();
       saleForm.reset(); customRows = []; renderCustomRows(); syncResMode();
