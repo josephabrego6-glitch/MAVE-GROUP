@@ -70,7 +70,7 @@
   async function fetchSalePayments(){
     const {data, error} = await sb.from('sale_payments').select('*').order('number', {ascending:true});
     if(error){ console.error(error); return []; }
-    return data.map(r=>({ id:r.id, saleId:r.sale_id, number:r.number, due:r.due_date, amount:Number(r.amount), paid:r.paid }));
+    return data.map(r=>({ id:r.id, saleId:r.sale_id, number:r.number, due:r.due_date, amount:Number(r.amount), paid:r.paid, paidAt:r.paid_at || null }));
   }
   async function fetchExpenses(){
     const {data, error} = await sb.from('expenses').select('*').order('created_at', {ascending:false});
@@ -1235,16 +1235,18 @@
 
   function stockNote(l, p){
     if(isRes()) return 'Reserva · stock actual: '+p.stock+' (se descuenta al entregar)';
-    if(p.stock <= 0) return '<b class="neg">⛔ Stock 0 — AGOTADO: no se puede despachar</b>';
-    if((Number(l.qty)||0) > p.stock) return '<b class="neg">Solo hay '+p.stock+' en stock</b>';
-    return 'Stock: '+p.stock;
+    const av = p.stock + editBonus(p.id);
+    if(av <= 0) return '<b class="neg">⛔ Stock 0 — AGOTADO: no se puede despachar</b>';
+    if((Number(l.qty)||0) > av) return '<b class="neg">Solo hay '+av+' en stock</b>';
+    return 'Stock: '+av;
   }
   const isRes = () => { const c = document.getElementById('saleResOn'); return !!(c && c.checked); };
+  const editBonus = pid => (editingSale && editingSale.qtyByPid[pid]) || 0;
   function saleBlocked(){
     if(isRes()) return false;
     const need = {};
     saleLines.forEach(l=>{ const p = lineProduct(l); if(p) need[p.id] = (need[p.id]||0) + (Number(l.qty)||0); });
-    return Object.keys(need).some(id=>{ const p = products.find(x=>x.id === id); return p.stock <= 0 || need[id] > p.stock; });
+    return Object.keys(need).some(id=>{ const p = products.find(x=>x.id === id); const av = p.stock + editBonus(id); return av <= 0 || need[id] > av; });
   }
   function updateSaleBlock(){
     const btn = document.querySelector('#saleForm button[type=submit]');
@@ -1393,7 +1395,7 @@
     const on = isRes();
     salePayType.innerHTML = on
       ? '<option value="res_pago">Abono + pago completo (a 30 días)</option><option value="res_2pagos">Abono + 2 pagos (a 15 y 30 días)</option>'
-      : '<option value="total">Pago total</option><option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>';
+      : '<option value="total">Pago total</option><option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>' + (editingSale ? '<option value="personalizado">Pagos personalizados (monto y fecha de cada pago)</option>' : '');
     const dl = document.getElementById('saleDelivOn'); if(dl){ dl.checked = false; dl.closest('.field').style.display = on ? 'none' : ''; }
     renderSaleLines(); refreshSaleCalc();
   }
@@ -1434,7 +1436,7 @@
     saleLines.forEach(l=>{ need[l.pid] = (need[l.pid]||0) + Number(l.qty); });
     for(const pid of Object.keys(need)){
       const p = products.find(x=>x.id === pid);
-      if(need[pid] > p.stock){ showToast('No hay suficiente stock de '+p.name+' (disponible: '+p.stock+').'); return; }
+      if(need[pid] > p.stock + editBonus(pid)){ showToast('No hay suficiente stock de '+p.name+' (disponible: '+(p.stock + editBonus(pid))+').'); return; }
     }
     if(saleLines.some(l=>!(linePrice(l) >= 0))){ showToast('El precio unitario no es válido.'); return; }
     const total = salePayTotal();
@@ -1445,13 +1447,15 @@
       const sum = customRows.reduce((a,r)=>a+(Number(r.amount)||0),0);
       if(customRows.some(r=>!(Number(r.amount)>0))){ showToast('Cada pago debe ser mayor que 0.'); return; }
       if(Math.abs(sum-total) > 0.01){ showToast('Los pagos suman '+fmtUSD(sum)+' y el total es '+fmtUSD(total)+'.'); return; }
-      schedule = customRows.map(r=>({ amount: Number(r.amount), due: r.due || todayLocal(), paid: !!r.paid }));
+      schedule = customRows.map(r=>({ amount: Number(r.amount), due: r.due || todayLocal(), paid: !!r.paid, paid_at: r.paid ? (r.paidAt || (editingSale ? todayLocal() : (document.getElementById('saleDate').value || todayLocal()))) : null }));
     }
     const adj = adjustedPrices();
     const items = saleLines.map((l,i)=>{ const p = lineProduct(l), u = adj[i];
       return { product:p.id, qty:Number(l.qty), unit_price: Math.abs(u - p.ventaUSD) > 0.0001 ? u : null }; });
 
-    const { error: saleErr } = await sb.rpc('register_sale_order', {
+    const rpcName = editingSale ? 'replace_sale_order' : 'register_sale_order';
+    const { error: saleErr } = await sb.rpc(rpcName, {
+      ...(editingSale ? { p_old: editingSale.ids } : {}),
       p_items: items, p_schedule: schedule,
       p_client: document.getElementById('saleClient').value.trim(),
       p_date: document.getElementById('saleDate').value || todayLocal(),
@@ -1463,7 +1467,9 @@
     });
     if(saleErr){ console.error(saleErr); showToast(saleErr.message || 'No se pudo registrar la venta.'); return; }
 
+    const wasEdit = !!editingSale;
     await refreshAllData();
+    if(wasEdit){ endEditSale(); renderAll(); showToast('Venta actualizada.'); return; }
     saleForm.reset();
     customRows = []; renderCustomRows();
     saleLines = [{ pid:'', qty:1, price:'' }];
@@ -1752,7 +1758,50 @@
 
   /* ===================== EDITAR VENTA ===================== */
   let editSaleIds = [];
-  function openEditSale(ids){
+  let editingSale = null; // { ids:[], qtyByPid:{} }
+  function startEditSale(ids){
+    const list = String(ids).split(',');
+    const lines = sales.filter(x=>list.includes(x.id));
+    if(!lines.length) return;
+    const f = lines[0];
+    const qtyByPid = {}; lines.forEach(x=>{ qtyByPid[x.productId] = (qtyByPid[x.productId]||0) + x.qty; });
+    editingSale = { ids: lines.map(x=>x.id), qtyByPid };
+    document.getElementById('saleResOn').checked = false;
+    document.getElementById('saleResOn').closest('label').style.display = 'none';
+    syncResMode();
+    saleLines = lines.map(x=>({ pid:x.productId, qty:x.qty, price: String(Math.round(x.totalUSD / x.qty * 1e6) / 1e6) }));
+    document.getElementById('saleClient').value = f.client || '';
+    document.getElementById('salePhone').value = f.phone || '';
+    document.getElementById('saleAdvisor').value = f.advisor || '';
+    document.getElementById('saleDate').value = f.date;
+    document.getElementById('saleFinal').value = '';
+    const deliv = lines.reduce((a,x)=>a+(x.delivery||0),0);
+    document.getElementById('saleDelivOn').checked = deliv > 0;
+    document.getElementById('saleDelivery').value = deliv > 0 ? deliv : '';
+    const pays = salePayments.filter(x=>lines.some(y=>y.id === x.saleId)).sort((a,b)=>a.number-b.number);
+    customRows = pays.map(x=>({ amount: x.amount, due: x.due, paid: !!x.paid, paidAt: x.paidAt || null }));
+    salePayType.value = 'personalizado';
+    renderCustomRows(); renderSaleLines(); refreshSaleCalc(true);
+    document.getElementById('saleEditWho').textContent = f.client || '(sin nombre)';
+    document.getElementById('saleEditBanner').style.display = '';
+    document.querySelector('#saleForm button[type=submit]').textContent = 'Guardar cambios';
+    document.getElementById('saleForm').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+  function endEditSale(){
+    editingSale = null;
+    document.getElementById('saleEditBanner').style.display = 'none';
+    document.getElementById('saleResOn').closest('label').style.display = '';
+    document.querySelector('#saleForm button[type=submit]').textContent = 'Registrar venta';
+    saleForm.reset(); customRows = []; renderCustomRows(); syncResMode();
+    saleLines = [{ pid:'', qty:1, price:'' }];
+    document.getElementById('saleDate').value = todayLocal();
+    document.getElementById('saleAdvisor').value = (me && me.full_name) || '';
+    renderSaleLines(); refreshSaleCalc();
+  }
+  document.getElementById('saleEditCancel').addEventListener('click', endEditSale);
+
+  function openEditSale(ids){ startEditSale(ids); }
+  function openEditSaleOld(ids){
     editSaleIds = String(ids).split(',');
     const s = sales.find(x=>x.id === editSaleIds[0]);
     if(!s) return;
