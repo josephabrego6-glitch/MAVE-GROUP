@@ -1239,7 +1239,7 @@
     if((Number(l.qty)||0) > p.stock) return '<b class="neg">Solo hay '+p.stock+' en stock</b>';
     return 'Stock: '+p.stock;
   }
-  const isRes = () => String(document.getElementById('salePayType').value).startsWith('res_');
+  const isRes = () => { const c = document.getElementById('saleResOn'); return !!(c && c.checked); };
   function saleBlocked(){
     if(isRes()) return false;
     const need = {};
@@ -1389,6 +1389,15 @@
   }
   const salePayType = document.getElementById('salePayType');
   const saleAbono = document.getElementById('saleAbono');
+  function syncResMode(){
+    const on = isRes();
+    salePayType.innerHTML = on
+      ? '<option value="res_pago">Abono + pago completo (a 30 días)</option><option value="res_2pagos">Abono + 2 pagos (a 15 y 30 días)</option>'
+      : '<option value="total">Pago total</option><option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>';
+    const dl = document.getElementById('saleDelivOn'); if(dl){ dl.checked = false; dl.closest('.field').style.display = on ? 'none' : ''; }
+    renderSaleLines(); refreshSaleCalc();
+  }
+  document.getElementById('saleResOn').addEventListener('change', syncResMode);
   salePayType.addEventListener('change', ()=>{ renderSaleLines(); refreshSaleCalc(); });
   document.getElementById('saleFinal').addEventListener('input', ()=> refreshSaleCalc(true));
   document.getElementById('saleDelivOn').addEventListener('change', ()=> refreshSaleCalc(true));
@@ -1414,7 +1423,7 @@
         p_plan: salePayType.value === 'res_pago' ? 'abono_pago' : 'abono_2pagos', p_abono: abonoR, p_days: 30 });
       if(rErr){ console.error(rErr); showToast(rErr.message || 'No se pudo registrar la reserva.'); return; }
       await refreshAllData();
-      saleForm.reset(); customRows = []; renderCustomRows();
+      saleForm.reset(); customRows = []; renderCustomRows(); syncResMode();
       saleLines = [{ pid:'', qty:1, price:'' }];
       document.getElementById('saleDate').value = todayLocal();
       document.getElementById('saleAdvisor').value = (me && me.full_name) || '';

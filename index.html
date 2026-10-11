@@ -254,12 +254,11 @@
                 <input type="text" id="saleAdvisor" placeholder="Nombre del asesor">
               </div>
               <div class="field">
+                <label style="display:flex;gap:8px;align-items:center;margin-bottom:10px;"><input type="checkbox" id="saleResOn" style="width:auto;"> Es una reserva (aún no se compra al proveedor)</label>
                 <label for="salePayType">Forma de pago</label>
                 <select id="salePayType">
                   <option value="total">Pago total</option>
                   <option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>
-                  <option value="res_pago">RESERVA: abono + pago completo (a 30 días)</option>
-                  <option value="res_2pagos">RESERVA: abono + 2 pagos (a 15 y 30 días)</option>
                 </select>
               </div>
               <div class="field" id="saleAbonoField" style="display:none;">
@@ -296,7 +295,7 @@
 
         <div class="panel" id="resPanel">
           <h2>Reservas <small style="font-weight:400;">(clientas que apartan antes de comprar al proveedor)</small></h2>
-          <p style="font-size:13px;color:var(--ink-soft);margin:0 0 6px;">Para reservar, usa «Nueva venta» y elige la forma de pago «Reserva».</p>
+          <p style="font-size:13px;color:var(--ink-soft);margin:0 0 6px;">Para reservar, usa «Nueva venta» y marca la casilla «Es una reserva».</p>
           <div id="resList" style="margin-top:14px;"></div>
         </div>
 
@@ -561,6 +560,6 @@
 <button type="button" class="cat-exit" id="catExit">Salir del modo cliente</button>
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js?v=16"></script>
+<script src="js/app.js?v=17"></script>
 </body>
 </html>
