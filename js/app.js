@@ -862,7 +862,7 @@
   }
 
   function makeThumb(dataUrl, maxDim){
-    maxDim = maxDim || 360;
+    maxDim = maxDim || 480;
     return new Promise(function(resolve){
       if(!dataUrl){ resolve(null); return; }
       const img = new Image();
@@ -872,7 +872,7 @@
         else if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
         const c = document.createElement('canvas'); c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL('image/jpeg', 0.7));
+        resolve(c.toDataURL('image/jpeg', 0.75));
       };
       img.onerror = function(){ resolve(null); };
       img.src = dataUrl;
@@ -914,7 +914,7 @@
     e.target.value = '';
     for(const f of files){
       const data = await new Promise(function(res){ const r = new FileReader(); r.onload = function(){ res(r.result); }; r.onerror = function(){ res(null); }; r.readAsDataURL(f); });
-      const out = data ? await resizeTo(data, 800, 0.78) : null;
+      const out = data ? await resizeTo(data, 1100, 0.85) : null;
       if(out){ extraPhotos.push(out); extraDirty = true; }
     }
     renderExtra();
@@ -925,7 +925,7 @@
   const cropCanvas = document.getElementById('cropCanvas');
   const cropCtx = cropCanvas.getContext('2d');
   const cropZoom = document.getElementById('cropZoom');
-  const CROP_OUT = 640;
+  const CROP_OUT = 900;
   const crop = { base:null, ratio:'1', zoom:1, ox:0, oy:0, fw:300, fh:300, box:300, drag:null };
 
   function cropSrcToBase(url){
@@ -973,7 +973,7 @@
     x.fillStyle = '#fff'; x.fillRect(0, 0, out.width, out.height);
     const sc = cropScale() * k, iw = crop.base.width * sc, ih = crop.base.height * sc;
     x.drawImage(crop.base, out.width / 2 + crop.ox * k - iw / 2, out.height / 2 + crop.oy * k - ih / 2, iw, ih);
-    return out.toDataURL('image/jpeg', 0.85);
+    return out.toDataURL("image/jpeg", 0.88);
   }
   async function openCropper(url){
     try{ crop.base = await cropSrcToBase(url); }
