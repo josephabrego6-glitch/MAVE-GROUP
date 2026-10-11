@@ -45,8 +45,8 @@
   #loginScreen:has(.login-photos) .login-card{ border-radius:0 18px 18px 0; align-self:stretch; display:flex; flex-direction:column; justify-content:center; }
   @media(max-width:860px){
     #loginScreen{ flex-direction:column; padding:16px; }
-    .login-photos{ width:100%; max-width:380px; min-height:0; height:auto; aspect-ratio:4/3; border-radius:18px 18px 0 0; border-right:1px solid var(--wine-line); }
-    #loginScreen:has(.login-photos) .login-card{ border-radius:0 0 18px 18px; align-self:auto; }
+    .login-photos{ width:100%; max-width:380px; align-self:center; min-height:0; height:auto; aspect-ratio:4/3; border-radius:18px 18px 0 0; border-right:1px solid var(--wine-line); }
+    #loginScreen:has(.login-photos) .login-card{ border-radius:0 0 18px 18px; align-self:center; }
   }
   .login-card{
     width: 100%; max-width: 380px;
