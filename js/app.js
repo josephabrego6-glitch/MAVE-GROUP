@@ -266,13 +266,22 @@
     }
     refreshImpPreview();
   });
+  // Tasa acordada para Colortrend (PayPal): 18.19 MXN por USD
+  function applyColortrendRate(){
+    const sup = String(document.getElementById('impSupplier').value||'').toLowerCase().replace(/\s+/g,'');
+    const cur = parseCur(document.getElementById('impCurrency').value);
+    if(/colou?rtrend/.test(sup) && cur === 'MXN'){
+      document.getElementById('impRate').value = 18.19;
+    }
+  }
   impForm.addEventListener('change', async function(e){
     const k = e.target.dataset.k, tr = e.target.closest('tr');
     if(e.target.id === 'impCurrency'){
       const code = parseCur(e.target.value);
-      if(code){ e.target.value = code; const r = await fetchRate(code); if(r) document.getElementById('impRate').value = r; else showToast('No se pudo obtener la tasa; escríbela a mano.'); }
+      if(code){ e.target.value = code; const r = await fetchRate(code); if(r) document.getElementById('impRate').value = r; else showToast('No se pudo obtener la tasa; escríbela a mano.'); applyColortrendRate(); }
       refreshImpPreview(); return;
     }
+    if(e.target.id === 'impSupplier'){ applyColortrendRate(); refreshImpPreview(); return; }
     if(!k || !tr) return;
     const i = Number(tr.dataset.i);
     if(tr.closest('#impOrdersTbl')){ renderImpRows(); refreshImpPreview(); return; }
