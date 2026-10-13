@@ -266,12 +266,12 @@
     }
     refreshImpPreview();
   });
-  // Tasa acordada para Colortrend (PayPal): 18.19 MXN por USD
+  // Tasa acordada para Colortrend (PayPal): 17.32 MXN por USD
   function applyColortrendRate(){
     const sup = String(document.getElementById('impSupplier').value||'').toLowerCase().replace(/\s+/g,'');
     const cur = parseCur(document.getElementById('impCurrency').value);
     if(/colou?rtrend/.test(sup) && cur === 'MXN'){
-      document.getElementById("impRate").value = 17.33;
+      document.getElementById("impRate").value = 17.32;
     }
   }
   impForm.addEventListener('change', async function(e){
