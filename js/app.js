@@ -271,7 +271,7 @@
     const sup = String(document.getElementById('impSupplier').value||'').toLowerCase().replace(/\s+/g,'');
     const cur = parseCur(document.getElementById('impCurrency').value);
     if(/colou?rtrend/.test(sup) && cur === 'MXN'){
-      document.getElementById('impRate').value = 18.19;
+      document.getElementById("impRate").value = 17.33;
     }
   }
   impForm.addEventListener('change', async function(e){
