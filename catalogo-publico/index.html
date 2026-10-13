@@ -164,8 +164,12 @@ function open(i){
   document.getElementById('lb').classList.add('on');
   var a=document.getElementById('ask');
   if(a)a.addEventListener('click',function(){
-    var t='Hola 🤍✨ Me interesa esta cartera: '+p.name+(money(p.price)?' ('+money(p.price)+')':'')+'. ¿Me das más información, por favor? 🎀',n=document.getElementById('note');
-    try{navigator.clipboard.writeText(t);n.textContent='Copiamos tu mensaje 🤍 Pégalo en el chat y ya estamos contigo.'}catch(x){}
+    var link=location.origin+location.pathname+'#b='+encodeURIComponent(p.ref);
+    var t='Hola 🤍✨ Me interesa esta cartera: '+p.name+(money(p.price)?' ('+money(p.price)+')':'')+'.\nAquí la veo: '+link+'\n¿Me das más información, por favor? 🎀',n=document.getElementById('note');
+    var ok=false;
+    try{navigator.clipboard.writeText(t).then(function(){},function(){});ok=true}catch(x){}
+    if(!ok){try{var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();ok=document.execCommand('copy');document.body.removeChild(ta)}catch(x2){}}
+    n.textContent=ok?'Copiamos tu mensaje con la cartera 🤍 Pégalo en el chat y ya estamos contigo.':'Copia este mensaje y pégalo en el chat: '+t;
   });
 }
 function close(){document.getElementById('lb').classList.remove('on');cur=-1}
@@ -183,7 +187,11 @@ document.getElementById('slides').addEventListener('scroll',function(){clearTime
 document.getElementById('lb').addEventListener('click',function(e){if(e.target.id==='lb')close()});
 document.addEventListener('keydown',function(e){if(cur<0)return;if(e.key==='Escape')close();if(e.key==='ArrowLeft')goSlide(-1);if(e.key==='ArrowRight')goSlide(1)});
 chips();
-rpc('public_catalog').then(function(r){ALL=r||[];apply()}).catch(function(){
+rpc('public_catalog').then(function(r){ALL=r||[];apply();
+  var m=/[#&]b=([^&]+)/.exec(location.hash||'');
+  if(m){var ref=decodeURIComponent(m[1]),k=-1;ALL.forEach(function(p,j){if(String(p.ref)===ref)k=j});
+    if(k>-1){if(ALL[k].status==='agotado'){filter='todos';chips();apply()}var vi=view.indexOf(ALL[k]);if(vi>-1)open(vi)}}
+}).catch(function(){
   document.getElementById('grid').innerHTML='<div class="msg"><span class="big">🤍</span>No pudimos cargar el catálogo en este momento.<br>Inténtalo de nuevo en unos segundos.</div>';});
 </script>
 </body>
