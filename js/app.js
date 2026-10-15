@@ -1940,23 +1940,23 @@
     const n = k => Number(c[k]||0);
     const entradas = n('cobrado_ventas') + n('cobrado_reservas');
     const salidas = n('compras_proveedor') + n('costos_importacion') + n('gastos') + n('delivery_pagado');
-    const neto = entradas - salidas;
+    const base = n('saldo_base'), neto = base + entradas - salidas;
     const row = (l, v, cls, note) => '<tr><td>'+l+(note?'<br><small style="color:var(--ink-soft);">'+note+'</small>':'')+'</td><td style="text-align:right;"><b class="'+(cls||'')+'">'+fmtUSD(v)+'</b></td></tr>';
     box.innerHTML = '<div style="overflow-x:auto;"><table><tbody>' +
-      row('Cobrado a clientas', entradas, 'pos', 'Ventas y abonos de reservas ya pagados') +
-      row('− Compras a proveedores', n('compras_proveedor'), '', 'Lo que pagaste en las importaciones') +
+      row('Saldo en el banco al '+(c.fecha_base||''), base, '', 'Punto de partida acordado') +
+      row('+ Cobrado a clientas desde entonces', entradas, 'pos', 'Ventas y abonos de reservas pagados después de esa fecha') +
+      row('− Compras a proveedores', n('compras_proveedor'), '', 'Importaciones pagadas después de esa fecha') +
       row('− Envío, aduana y otros de importación', n('costos_importacion')) +
       row('− Gastos', n('gastos')) +
       row('− Delivery pagado a asesores', n('delivery_pagado')) +
-      row('= Dinero neto del negocio', neto, neto>=0?'pos':'neg', 'Cobrado menos todo lo que salió') +
+      row('= Saldo que debería haber en el banco', neto, neto>=0?'pos':'neg', 'Si no coincide con tu banco, falta registrar algún movimiento') +
       '</tbody></table></div>' +
-      '<h3 style="margin:16px 0 6px;font-size:14px;">¿Por qué no es igual a la ganancia?</h3>' +
+      '<h3 style="margin:16px 0 6px;font-size:14px;">Otros datos</h3>' +
       '<div style="overflow-x:auto;"><table><tbody>' +
       row('Ganancia de las ventas', n('ganancia'), n('ganancia')>=0?'pos':'neg', 'Se cuenta al vender, aunque no hayas cobrado todo') +
       row('Mercancía en inventario (a costo)', n('inventario_costo'), '', 'Plata reinvertida que aún no se vende') +
       row('Por cobrar a clientas', n('por_cobrar_ventas'), '', 'Cuotas pendientes de ventas') +
-      '</tbody></table></div>' +
-      '<p style="font-size:12px;color:var(--ink-soft);margin:8px 0 0;">Para comparar con tu banco: suma a este dinero neto lo que tú aportaste de tu bolsillo.</p>';
+      '</tbody></table></div>';
   }
 
   function showMonthDetail(ym){
