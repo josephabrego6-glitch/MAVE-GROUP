@@ -1930,8 +1930,11 @@
   }
 
   async function renderCash(){
-    const box = document.getElementById('cashBox');
+    const box = document.getElementById('cashBox'), pnl = document.getElementById('cashPanel');
     if(!box) return;
+    const esJoseph = !!me && String(me.email||'').toLowerCase() === 'joseph@mave.com';
+    if(pnl) pnl.style.display = esJoseph ? '' : 'none';
+    if(!esJoseph) return;
     const { data:c, error } = await sb.rpc('cash_summary');
     if(error || !c){ box.innerHTML = '<div class="empty-state">No se pudo calcular el dinero real.</div>'; return; }
     const n = k => Number(c[k]||0);
