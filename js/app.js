@@ -1911,6 +1911,7 @@
     document.getElementById('cardGanancia').classList.toggle('neg', ganancia < 0);
 
     renderMonthly();
+    renderCash();
     const tbody = document.querySelector('#tblRecentSales tbody');
     tbody.innerHTML = '';
     const recent = sales.slice(0,5);
@@ -1926,6 +1927,33 @@
         '<td data-label="Ganancia"><span class="'+(s.profitUSD>=0?'pos':'neg')+'">'+fmtUSD(s.profitUSD)+'</span></td>';
       tbody.appendChild(tr);
     });
+  }
+
+  async function renderCash(){
+    const box = document.getElementById('cashBox');
+    if(!box) return;
+    const { data:c, error } = await sb.rpc('cash_summary');
+    if(error || !c){ box.innerHTML = '<div class="empty-state">No se pudo calcular el dinero real.</div>'; return; }
+    const n = k => Number(c[k]||0);
+    const entradas = n('cobrado_ventas') + n('cobrado_reservas');
+    const salidas = n('compras_proveedor') + n('costos_importacion') + n('gastos') + n('delivery_pagado');
+    const neto = entradas - salidas;
+    const row = (l, v, cls, note) => '<tr><td>'+l+(note?'<br><small style="color:var(--ink-soft);">'+note+'</small>':'')+'</td><td style="text-align:right;"><b class="'+(cls||'')+'">'+fmtUSD(v)+'</b></td></tr>';
+    box.innerHTML = '<div style="overflow-x:auto;"><table><tbody>' +
+      row('Cobrado a clientas', entradas, 'pos', 'Ventas y abonos de reservas ya pagados') +
+      row('− Compras a proveedores', n('compras_proveedor'), '', 'Lo que pagaste en las importaciones') +
+      row('− Envío, aduana y otros de importación', n('costos_importacion')) +
+      row('− Gastos', n('gastos')) +
+      row('− Delivery pagado a asesores', n('delivery_pagado')) +
+      row('= Dinero neto del negocio', neto, neto>=0?'pos':'neg', 'Cobrado menos todo lo que salió') +
+      '</tbody></table></div>' +
+      '<h3 style="margin:16px 0 6px;font-size:14px;">¿Por qué no es igual a la ganancia?</h3>' +
+      '<div style="overflow-x:auto;"><table><tbody>' +
+      row('Ganancia de las ventas', n('ganancia'), n('ganancia')>=0?'pos':'neg', 'Se cuenta al vender, aunque no hayas cobrado todo') +
+      row('Mercancía en inventario (a costo)', n('inventario_costo'), '', 'Plata reinvertida que aún no se vende') +
+      row('Por cobrar a clientas', n('por_cobrar_ventas'), '', 'Cuotas pendientes de ventas') +
+      '</tbody></table></div>' +
+      '<p style="font-size:12px;color:var(--ink-soft);margin:8px 0 0;">Para comparar con tu banco: suma a este dinero neto lo que tú aportaste de tu bolsillo.</p>';
   }
 
   function showMonthDetail(ym){
