@@ -1911,7 +1911,6 @@
     document.getElementById('cardGanancia').classList.toggle('neg', ganancia < 0);
 
     renderMonthly();
-    renderCash();
     const tbody = document.querySelector('#tblRecentSales tbody');
     tbody.innerHTML = '';
     const recent = sales.slice(0,5);
@@ -1927,36 +1926,6 @@
         '<td data-label="Ganancia"><span class="'+(s.profitUSD>=0?'pos':'neg')+'">'+fmtUSD(s.profitUSD)+'</span></td>';
       tbody.appendChild(tr);
     });
-  }
-
-  async function renderCash(){
-    const box = document.getElementById('cashBox'), pnl = document.getElementById('cashPanel');
-    if(!box) return;
-    const esJoseph = !!me && String(me.email||'').toLowerCase() === 'joseph@mave.com';
-    if(pnl) pnl.style.display = esJoseph ? '' : 'none';
-    if(!esJoseph) return;
-    const { data:c, error } = await sb.rpc('cash_summary');
-    if(error || !c){ box.innerHTML = '<div class="empty-state">No se pudo calcular el dinero real.</div>'; return; }
-    const n = k => Number(c[k]||0);
-    const entradas = n('cobrado_ventas') + n('cobrado_reservas');
-    const salidas = n('compras_proveedor') + n('costos_importacion') + n('gastos') + n('delivery_pagado');
-    const base = n('saldo_base'), neto = base + entradas - salidas;
-    const row = (l, v, cls, note) => '<tr><td>'+l+(note?'<br><small style="color:var(--ink-soft);">'+note+'</small>':'')+'</td><td style="text-align:right;"><b class="'+(cls||'')+'">'+fmtUSD(v)+'</b></td></tr>';
-    box.innerHTML = '<div style="overflow-x:auto;"><table><tbody>' +
-      row('Saldo en el banco al '+(c.fecha_base||''), base, '', 'Punto de partida acordado') +
-      row('+ Cobrado a clientas desde entonces', entradas, 'pos', 'Ventas y abonos de reservas pagados después de esa fecha') +
-      row('− Compras a proveedores', n('compras_proveedor'), '', 'Importaciones pagadas después de esa fecha') +
-      row('− Envío, aduana y otros de importación', n('costos_importacion')) +
-      row('− Gastos', n('gastos')) +
-      row('− Delivery pagado a asesores', n('delivery_pagado')) +
-      row('= Saldo que debería haber en el banco', neto, neto>=0?'pos':'neg', 'Si no coincide con tu banco, falta registrar algún movimiento') +
-      '</tbody></table></div>' +
-      '<h3 style="margin:16px 0 6px;font-size:14px;">Otros datos</h3>' +
-      '<div style="overflow-x:auto;"><table><tbody>' +
-      row('Ganancia de las ventas', n('ganancia'), n('ganancia')>=0?'pos':'neg', 'Se cuenta al vender, aunque no hayas cobrado todo') +
-      row('Mercancía en inventario (a costo)', n('inventario_costo'), '', 'Plata reinvertida que aún no se vende') +
-      row('Por cobrar a clientas', n('por_cobrar_ventas'), '', 'Cuotas pendientes de ventas') +
-      '</tbody></table></div>';
   }
 
   function showMonthDetail(ym){
