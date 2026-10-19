@@ -349,6 +349,17 @@
           </div>
           <div class="empty-state" id="emptyCobros" style="display:none;">&#127881; No tienes cobros pendientes.</div>
         </div>
+        <div class="panel">
+          <h2>Historial de no completados</h2>
+          <p style="font-size:13px;color:var(--ink-soft);margin:0 0 8px;">Clientas que abonaron y no completaron el pago. El abono no se devuelve y la cartera volvió al stock.</p>
+          <div style="overflow-x:auto;">
+          <table id="tblNoComp">
+            <thead><tr><th>Cerrado</th><th>Cliente</th><th>Productos</th><th>Total de la venta</th><th>Abono retenido</th><th>No cobrado</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          </div>
+          <div class="empty-state" id="emptyNoComp" style="display:none;">Aún no hay ventas marcadas como no completadas.</div>
+        </div>
       </section>
 
       <!-- ---------- INSUMOS ---------- -->
@@ -561,6 +572,6 @@
 <button type="button" class="cat-exit" id="catExit">Salir del modo cliente</button>
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js?v=27"></script>
+<script src="js/app.js?v=28"></script>
 </body>
 </html>

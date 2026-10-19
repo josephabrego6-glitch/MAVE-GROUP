@@ -1703,7 +1703,7 @@
       if(!next) return;
       const total = g.reduce((a,x)=>a+x.totalUSD,0);
       const paid = pays.filter(x=>x.paid).reduce((a,x)=>a+x.amount,0);
-      rows.push({ g, pays, next, total, paid, kind: next.due < today ? 0 : (next.due === today ? 1 : (next.due <= addDays(today,3) ? 2 : 3)) });
+      rows.push({ g, pays, next, total, paid, dias: Math.floor((new Date(today+'T00:00:00') - new Date(String(g.map(x=>x.date).sort()[0])+'T00:00:00'))/86400000), kind: next.due < today ? 0 : (next.due === today ? 1 : (next.due <= addDays(today,3) ? 2 : 3)) });
     });
     rows.sort((a,b)=>a.kind-b.kind || (a.next.due < b.next.due ? -1 : 1));
     const owed = rows.reduce((a,r)=>a + (r.total - r.paid), 0);
@@ -1727,7 +1727,8 @@
         '<td data-label="Cobrado / Saldo">Cobrado '+fmtUSD(r.paid)+'<br><b class="neg">Saldo '+fmtUSD(r.total-r.paid)+'</b></td>'+
         '<td data-label="Plan de pagos">'+chips+'</td>'+
         '<td data-label="Estado">'+ST[r.kind]+'<br><small>Falta '+nextLbl+'</small></td>'+
-        '<td data-label=""><div class="row-actions"><button class="link-btn" data-cobrar="'+r.next.id+'">Cobrar '+(r.next.number === 0 ? 'abono' : 'pago '+r.next.number)+'</button>'+'</div></td>';
+        '<td data-label=""><div class="row-actions"><button class="link-btn" data-cobrar="'+r.next.id+'">Cobrar '+(r.next.number === 0 ? 'abono' : 'pago '+r.next.number)+'</button>'+
+          (r.dias > 30 ? '<button class="link-btn neg" data-nocomp="'+r.g.map(x=>x.id).join(',')+'">No completado</button>' : '')+'</div></td>';
       tbody.appendChild(tr);
     });
     tbody.querySelectorAll('[data-cobrar]').forEach(b=> b.addEventListener('click', async ()=>{
@@ -1736,6 +1737,33 @@
       if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
       await refreshAllData(); renderAll(); showToast('Pago registrado.');
     }));
+    tbody.querySelectorAll('[data-nocomp]').forEach(b=> b.addEventListener('click', async ()=>{
+      const r = rows.find(x=>x.g.map(y=>y.id).join(',') === b.dataset.nocomp);
+      if(!r) return;
+      if(!confirm('¿Marcar como NO COMPLETADO a '+r.g[0].client+'?\n\nEl abono de '+fmtUSD(r.paid)+' se queda como ingreso (no se devuelve), la venta se cierra y la cartera vuelve al stock. Queda guardado en el historial.')) return;
+      const { error } = await sb.rpc('mark_sale_uncompleted', { p_sales: b.dataset.nocomp.split(',') });
+      if(error){ console.error(error); showToast(error.message || 'No se pudo marcar como no completado.'); return; }
+      await refreshAllData(); renderAll(); showToast('Marcado como no completado. Queda en el historial.');
+    }));
+    renderNoComp();
+  }
+
+  async function renderNoComp(){
+    const tb = document.querySelector('#tblNoComp tbody'); if(!tb) return;
+    const { data, error } = await sb.from('uncompleted_sales').select('*').order('created_at',{ascending:false});
+    if(error){ console.error(error); return; }
+    tb.innerHTML = '';
+    document.getElementById('emptyNoComp').style.display = (data||[]).length ? 'none' : 'block';
+    (data||[]).forEach(u=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td data-label="Cerrado">'+u.closed_date+'<br><small>Venta: '+u.sale_date+'</small></td>'+
+        '<td data-label="Cliente"><strong>'+escapeHtml(u.client)+'</strong>'+(u.contact_phone?'<br><small>'+escapeHtml(u.contact_phone)+'</small>':'')+(u.advisor?'<br><small>Asesor: '+escapeHtml(u.advisor)+'</small>':'')+'</td>'+
+        '<td data-label="Productos"><small>'+(u.items||[]).map(i=>i.qty+' × '+escapeHtml(i.product_name)).join('<br>')+'</small></td>'+
+        '<td data-label="Total de la venta">'+fmtUSD(Number(u.total_usd))+'</td>'+
+        '<td data-label="Abono retenido"><b class="pos">'+fmtUSD(Number(u.abono_retenido))+'</b></td>'+
+        '<td data-label="No cobrado"><span class="neg">'+fmtUSD(Number(u.saldo_no_cobrado))+'</span></td>';
+      tb.appendChild(tr);
+    });
   }
 
   /* ===================== AVISO DE COBROS (cuotas a 15 y 30 días) ===================== */
