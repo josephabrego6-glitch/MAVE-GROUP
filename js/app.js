@@ -1369,7 +1369,7 @@
     me2.textContent = margin.toFixed(1) + '%'; me2.style.color = profit < 0 ? 'var(--danger)' : 'var(--good)';
     const type = salePayType.value;
     const resType = isRes();
-    const cuotas = type === 'cuotas' || resType;
+    const cuotas = type === 'cuotas' || (resType && type !== 'personalizado');
     const custom = type === 'personalizado';
     document.getElementById('saleAbonoField').style.display = cuotas ? '' : 'none';
     document.getElementById('saleCustomField').style.display = custom ? '' : 'none';
@@ -1403,7 +1403,7 @@
   function syncResMode(){
     const on = isRes();
     const keep = salePayType.value;
-    salePayType.innerHTML = '<option value="total">Pago total</option><option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>' + (editingSale ? '<option value="personalizado">Pagos personalizados (monto y fecha de cada pago)</option>' : '');
+    salePayType.innerHTML = '<option value="total">Pago total</option><option value="cuotas">Abono + 2 pagos (a 15 y 30 días)</option>' + ((editingSale || editingRes) ? '<option value="personalizado">Pagos personalizados (monto y fecha de cada pago)</option>' : '');
     if(Array.from(salePayType.options).some(o=>o.value === keep)) salePayType.value = keep;
     const dl = document.getElementById('saleDelivOn'); if(dl){ dl.checked = false; dl.closest('.field').style.display = on ? 'none' : ''; }
     renderSaleLines(); refreshSaleCalc();
@@ -1423,10 +1423,33 @@
     if(saleLines.some(l=>!(Number(l.qty) >= 1))){ showToast('La cantidad debe ser al menos 1.'); return; }
     if(isRes()){
       if(saleLines.length !== 1){ showToast('Una reserva es de un solo producto: quita las otras líneas.'); return; }
-      const abonoR = Number(saleAbono.value), totR = salePayTotal();
-      if(!(abonoR > 0 && abonoR < totR)){ showToast('El abono debe ser mayor que 0 y menor que el total.'); return; }
       if(saleDelivery() > 0){ showToast('El delivery no aplica a reservas: se agrega al entregar.'); return; }
       const l0 = saleLines[0], p0 = lineProduct(l0), u0 = adjustedPrices()[0];
+      if(editingRes){
+        const totE = salePayTotal(), dateE = document.getElementById('saleDate').value || todayLocal();
+        let pays;
+        if(salePayType.value === 'personalizado'){
+          if(!customRows.length || customRows.some(r=>!(Number(r.amount)>0))){ showToast('Cada pago debe ser mayor que 0.'); return; }
+          const sumE = customRows.reduce((a,r)=>a+(Number(r.amount)||0),0);
+          if(Math.abs(sumE-totE) > 0.01){ showToast('Los pagos suman '+fmtUSD(sumE)+' y el total es '+fmtUSD(totE)+'.'); return; }
+          pays = customRows.map(r=>({ amount:Number(r.amount), due:r.due || dateE, paid:!!r.paid, paid_at: r.paid ? (r.paidAt || todayLocal()) : null }));
+        } else {
+          const ab = Number(saleAbono.value);
+          if(!(ab > 0 && ab < totE)){ showToast('El abono debe ser mayor que 0 y menor que el total.'); return; }
+          const rest = totE - ab, c1 = Math.round(rest/2*100)/100;
+          pays = salePayType.value === 'cuotas'
+            ? [{amount:ab,due:dateE,paid:true,paid_at:dateE},{amount:c1,due:addDays(dateE,15),paid:false},{amount:Math.round((rest-c1)*100)/100,due:addDays(dateE,30),paid:false}]
+            : [{amount:ab,due:dateE,paid:true,paid_at:dateE},{amount:rest,due:addDays(dateE,30),paid:false}];
+        }
+        const { error: eErr } = await sb.rpc('replace_reservation', { p_id: editingRes.id, p_product: p0.id, p_qty: Number(l0.qty), p_price: u0,
+          p_client: document.getElementById('saleClient').value.trim(), p_phone: document.getElementById('salePhone').value.trim(),
+          p_advisor: document.getElementById('saleAdvisor').value.trim(), p_date: dateE, p_payments: pays });
+        if(eErr){ console.error(eErr); showToast(eErr.message || 'No se pudo guardar la reserva.'); return; }
+        await refreshAllData(); endEditSale(); renderAll(); showToast('Reserva actualizada.');
+        return;
+      }
+      const abonoR = Number(saleAbono.value), totR = salePayTotal();
+      if(!(abonoR > 0 && abonoR < totR)){ showToast('El abono debe ser mayor que 0 y menor que el total.'); return; }
       const { error: rErr } = await sb.rpc('create_reservation', {
         p_product: p0.id, p_qty: Number(l0.qty), p_price: Math.abs(u0 - p0.ventaUSD) > 0.0001 ? u0 : null,
         p_client: document.getElementById('saleClient').value.trim(), p_phone: document.getElementById('salePhone').value.trim(),
@@ -1456,15 +1479,16 @@
       const sum = customRows.reduce((a,r)=>a+(Number(r.amount)||0),0);
       if(customRows.some(r=>!(Number(r.amount)>0))){ showToast('Cada pago debe ser mayor que 0.'); return; }
       if(Math.abs(sum-total) > 0.01){ showToast('Los pagos suman '+fmtUSD(sum)+' y el total es '+fmtUSD(total)+'.'); return; }
-      schedule = customRows.map(r=>({ amount: Number(r.amount), due: r.due || todayLocal(), paid: !!r.paid, paid_at: r.paid ? (r.paidAt || (editingSale ? todayLocal() : (document.getElementById('saleDate').value || todayLocal()))) : null }));
+      schedule = customRows.map(r=>({ amount: Number(r.amount), due: r.due || todayLocal(), paid: !!r.paid, paid_at: r.paid ? (r.paidAt || ((editingSale || editingRes) ? todayLocal() : (document.getElementById('saleDate').value || todayLocal()))) : null }));
     }
     const adj = adjustedPrices();
     const items = saleLines.map((l,i)=>{ const p = lineProduct(l), u = adj[i];
       return { product:p.id, qty:Number(l.qty), unit_price: Math.abs(u - p.ventaUSD) > 0.0001 ? u : null }; });
 
-    const rpcName = editingSale ? 'replace_sale_order' : 'register_sale_order';
+    const rpcName = editingRes ? 'reservation_to_sale' : (editingSale ? 'replace_sale_order' : 'register_sale_order');
     const { error: saleErr } = await sb.rpc(rpcName, {
       ...(editingSale ? { p_old: editingSale.ids } : {}),
+      ...(editingRes ? { p_old: editingRes.id } : {}),
       p_items: items, p_schedule: schedule,
       p_client: document.getElementById('saleClient').value.trim(),
       p_date: document.getElementById('saleDate').value || todayLocal(),
@@ -1476,9 +1500,9 @@
     });
     if(saleErr){ console.error(saleErr); showToast(saleErr.message || 'No se pudo registrar la venta.'); return; }
 
-    const wasEdit = !!editingSale;
+    const wasEdit = !!editingSale, wasRes = !!editingRes;
     await refreshAllData();
-    if(wasEdit){ endEditSale(); renderAll(); showToast('Venta actualizada.'); return; }
+    if(wasEdit || wasRes){ endEditSale(); renderAll(); showToast(wasRes ? 'Reserva convertida en venta.' : 'Venta actualizada.'); return; }
     saleForm.reset();
     customRows = []; renderCustomRows();
     saleLines = [{ pid:'', qty:1, price:'' }];
@@ -1584,7 +1608,7 @@
       if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
       await refreshAllData(); renderAll(); showToast('Pago registrado.');
     }));
-    box.querySelectorAll('[data-resedit]').forEach(b=> b.addEventListener('click', ()=> openEditRes(b.dataset.resedit)));
+    box.querySelectorAll('[data-resedit]').forEach(b=> b.addEventListener('click', ()=> startEditRes(b.dataset.resedit)));
     box.querySelectorAll('[data-resdeliver]').forEach(b=> b.addEventListener('click', async ()=>{
       if(!confirm('¿Entregar esta reserva? Se registrará como venta de hoy y se descontará del stock.')) return;
       const { error } = await sb.rpc('deliver_reservation', { p_id: b.dataset.resdeliver, p_date: todayLocal() });
@@ -1598,57 +1622,6 @@
       await refreshAllData(); renderAll(); showToast('Reserva cancelada.');
     }));
   }
-
-  /* ----- editar reserva ----- */
-  let editingResId = null, erRows = [];
-  function erTotal(){ return (Number(document.getElementById('erQty').value)||0) * (Number(document.getElementById('erPrice').value)||0); }
-  function erRefresh(){
-    const sum = erRows.reduce((a,x)=>a+(Number(x.amount)||0),0), tot = erTotal(), ok = Math.abs(sum-tot) <= 0.01;
-    document.getElementById('erSum').innerHTML = 'Pagos suman <b>'+fmtUSD(sum)+'</b> · Total de la reserva <b>'+fmtUSD(tot)+'</b> '+(ok ? '<span class="pos">&#10003;</span>' : '<b class="neg">(deben coincidir)</b>');
-  }
-  function erRender(){
-    document.getElementById('erPays').innerHTML = '<label style="font-size:13px;font-weight:600;">Pagos</label>' + erRows.map((x,i)=>
-      '<div style="display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap;"><span style="min-width:54px;">'+(i===0?'Abono':'Pago '+i)+'</span>'+
-      '<input type="number" step="0.01" min="0" data-eramt="'+i+'" value="'+x.amount+'" style="width:90px;">'+
-      '<input type="date" data-erdue="'+i+'" value="'+x.due+'">'+
-      '<label style="display:flex;gap:4px;align-items:center;font-size:13px;"><input type="checkbox" data-erpaid="'+i+'" style="width:auto;"'+(x.paid?' checked':'')+'> cobrado</label></div>').join('');
-    document.querySelectorAll('[data-eramt]').forEach(e=> e.addEventListener('input', ()=>{ erRows[e.dataset.eramt].amount = e.value; erRefresh(); }));
-    document.querySelectorAll('[data-erdue]').forEach(e=> e.addEventListener('change', ()=>{ erRows[e.dataset.erdue].due = e.value; }));
-    document.querySelectorAll('[data-erpaid]').forEach(e=> e.addEventListener('change', ()=>{ const r = erRows[e.dataset.erpaid]; r.paid = e.checked; if(e.checked && !r.paidAt) r.paidAt = todayLocal(); if(!e.checked) r.paidAt = null; }));
-    erRefresh();
-  }
-  function openEditRes(id){
-    const r = reservations.find(x=>x.id === id); if(!r) return;
-    editingResId = id;
-    erRows = resPayments.filter(x=>x.resId === id).sort((a,b)=>a.number-b.number).map(x=>({ amount: x.amount, due: x.due, paid: !!x.paid, paidAt: x.paidAt || null }));
-    document.getElementById('erProd').textContent = r.productName;
-    document.getElementById('erClient').value = r.client || '';
-    document.getElementById('erPhone').value = r.phone || '';
-    document.getElementById('erAdvisor').value = r.advisor || '';
-    document.getElementById('erDate').value = r.date;
-    document.getElementById('erQty').value = r.qty;
-    document.getElementById('erPrice').value = r.price;
-    erRender();
-    document.getElementById('editResOverlay').classList.add('active');
-  }
-  ['erQty','erPrice'].forEach(i=> document.getElementById(i).addEventListener('input', erRefresh));
-  document.getElementById('erCancel').addEventListener('click', ()=> document.getElementById('editResOverlay').classList.remove('active'));
-  document.getElementById('editResForm').addEventListener('submit', async function(e){
-    e.preventDefault();
-    const { error } = await sb.rpc('update_reservation', {
-      p_id: editingResId,
-      p_client: document.getElementById('erClient').value,
-      p_phone: document.getElementById('erPhone').value,
-      p_advisor: document.getElementById('erAdvisor').value,
-      p_date: document.getElementById('erDate').value,
-      p_qty: Number(document.getElementById('erQty').value),
-      p_price: Number(document.getElementById('erPrice').value),
-      p_payments: erRows.map(x=>({ amount: Number(x.amount), due: x.due, paid: !!x.paid, paid_at: x.paid ? (x.paidAt || todayLocal()) : null }))
-    });
-    if(error){ console.error(error); showToast(error.message || 'No se pudo guardar la reserva.'); return; }
-    document.getElementById('editResOverlay').classList.remove('active');
-    await refreshAllData(); renderAll(); showToast('Reserva actualizada.');
-  });
 
   /* ===================== DELIVERY POR ASESOR ===================== */
   function renderDelivery(){
@@ -1847,14 +1820,41 @@
 
   /* ===================== EDITAR VENTA ===================== */
   let editSaleIds = [];
+  let editingRes = null; // { id }
   let editingSale = null; // { ids:[], qtyByPid:{} }
+  function startEditRes(id){
+    const r = reservations.find(x=>x.id === id); if(!r) return;
+    editingSale = null; editingRes = { id };
+    document.getElementById('saleResOn').closest('label').style.display = '';
+    document.getElementById('saleResOn').checked = true;
+    syncResMode();
+    saleLines = [{ pid:r.productId, qty:r.qty, price:String(r.price) }];
+    document.getElementById('saleClient').value = r.client || '';
+    document.getElementById('salePhone').value = r.phone || '';
+    document.getElementById('saleAdvisor').value = r.advisor || '';
+    document.getElementById('saleDate').value = r.date;
+    document.getElementById('saleFinal').value = '';
+    document.getElementById('saleDelivOn').checked = false;
+    document.getElementById('saleDelivery').value = '';
+    customRows = resPayments.filter(x=>x.resId === id).sort((a,b)=>a.number-b.number).map(x=>({ amount:x.amount, due:x.due, paid:!!x.paid, paidAt:x.paidAt || null }));
+    salePayType.value = 'personalizado';
+    renderCustomRows(); renderSaleLines(); refreshSaleCalc(true);
+    document.getElementById('saleEditKind').textContent = 'Editando la reserva de';
+    document.getElementById('saleEditHelp').textContent = 'Cambia lo que quieras. Si desmarcas «Es una reserva» y guardas, se convierte en venta normal (descuenta stock).';
+    document.getElementById('saleEditWho').textContent = r.client || '(sin nombre)';
+    document.getElementById('saleEditBanner').style.display = '';
+    document.querySelector('#saleForm button[type=submit]').textContent = 'Guardar cambios';
+    document.getElementById('saleForm').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
   function startEditSale(ids){
     const list = String(ids).split(',');
     const lines = sales.filter(x=>list.includes(x.id));
     if(!lines.length) return;
     const f = lines[0];
     const qtyByPid = {}; lines.forEach(x=>{ qtyByPid[x.productId] = (qtyByPid[x.productId]||0) + x.qty; });
-    editingSale = { ids: lines.map(x=>x.id), qtyByPid };
+    editingRes = null; editingSale = { ids: lines.map(x=>x.id), qtyByPid };
+    document.getElementById('saleEditKind').textContent = 'Editando la venta de';
+    document.getElementById('saleEditHelp').textContent = 'Al guardar, reemplaza a la anterior y el stock se ajusta.';
     document.getElementById('saleResOn').checked = false;
     document.getElementById('saleResOn').closest('label').style.display = 'none';
     syncResMode();
@@ -1877,7 +1877,7 @@
     document.getElementById('saleForm').scrollIntoView({ behavior:'smooth', block:'start' });
   }
   function endEditSale(){
-    editingSale = null;
+    editingSale = null; editingRes = null;
     document.getElementById('saleEditBanner').style.display = 'none';
     document.getElementById('saleResOn').closest('label').style.display = '';
     document.querySelector('#saleForm button[type=submit]').textContent = 'Registrar venta';
