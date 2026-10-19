@@ -1703,7 +1703,7 @@
       if(!next) return;
       const total = g.reduce((a,x)=>a+x.totalUSD,0);
       const paid = pays.filter(x=>x.paid).reduce((a,x)=>a+x.amount,0);
-      rows.push({ g, pays, next, total, paid, dias: Math.floor((new Date(today+'T00:00:00') - new Date(String(g.map(x=>x.date).sort()[0])+'T00:00:00'))/86400000), kind: next.due < today ? 0 : (next.due === today ? 1 : (next.due <= addDays(today,3) ? 2 : 3)) });
+      rows.push({ g, pays, next, total, paid, dias: Math.floor((new Date(today+'T00:00:00') - new Date(String((pays.filter(x=>x.paid && x.paidAt).map(x=>x.paidAt).sort()[0] || g.map(x=>x.date).sort()[0]))+'T00:00:00'))/86400000), kind: next.due < today ? 0 : (next.due === today ? 1 : (next.due <= addDays(today,3) ? 2 : 3)) });
     });
     rows.sort((a,b)=>a.kind-b.kind || (a.next.due < b.next.due ? -1 : 1));
     const owed = rows.reduce((a,r)=>a + (r.total - r.paid), 0);
