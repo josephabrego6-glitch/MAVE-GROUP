@@ -538,6 +538,28 @@
   </div>
 </div>
 
+<!-- ---------- Modal: editar reserva ---------- -->
+<div class="modal-overlay" id="editResOverlay">
+  <div class="modal">
+    <h3>Editar reserva</h3>
+    <form id="editResForm">
+      <p style="font-size:13px;margin:0 0 8px;"><b id="erProd"></b></p>
+      <div class="field"><label for="erClient">Cliente</label><input type="text" id="erClient" required></div>
+      <div class="field"><label for="erPhone">Teléfono</label><input type="tel" id="erPhone"></div>
+      <div class="field"><label for="erAdvisor">Asesor</label><input type="text" id="erAdvisor"></div>
+      <div class="field"><label for="erDate">Fecha de la reserva</label><input type="date" id="erDate" required></div>
+      <div class="field"><label for="erQty">Cantidad</label><input type="number" id="erQty" min="1" step="1" required></div>
+      <div class="field"><label for="erPrice">Precio por unidad (USD)</label><input type="number" id="erPrice" min="0" step="0.01" required></div>
+      <div id="erPays" style="margin-top:8px;"></div>
+      <p id="erSum" style="font-size:13px;margin:6px 0 0;"></p>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary" style="width:auto;">Guardar</button>
+        <button type="button" class="btn btn-ghost" id="erCancel">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- ---------- Modal: recortar foto ---------- -->
 <div class="modal-overlay" id="cropModalOverlay">
   <div class="modal crop-modal">
@@ -572,6 +594,6 @@
 <button type="button" class="cat-exit" id="catExit">Salir del modo cliente</button>
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js?v=29"></script>
+<script src="js/app.js?v=30"></script>
 </body>
 </html>

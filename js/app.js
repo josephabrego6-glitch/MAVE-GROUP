@@ -82,7 +82,7 @@
     try{
       const [r1, r2] = await Promise.all([sb.from('reservations').select('*').order('created_at',{ascending:false}), sb.from('reservation_payments').select('*').order('number',{ascending:true})]);
       reservations = (r1.data||[]).map(r=>({ id:r.id, productId:r.product_id, productName:r.product_name, qty:r.qty, price:Number(r.unit_price), client:r.client, phone:r.contact_phone, advisor:r.advisor, date:r.date, plan:r.plan, status:r.status }));
-      resPayments = (r2.data||[]).map(r=>({ id:r.id, resId:r.reservation_id, number:r.number, due:r.due_date, amount:Number(r.amount), paid:r.paid }));
+      resPayments = (r2.data||[]).map(r=>({ id:r.id, resId:r.reservation_id, number:r.number, due:r.due_date, amount:Number(r.amount), paid:r.paid, paidAt:r.paid_at || null }));
     }catch(e){ reservations = []; resPayments = []; }
     try{ const {data} = await sb.from('delivery_payouts').select('*').order('created_at',{ascending:false}); deliveryPayouts = (data||[]).map(r=>({ id:r.id, advisor:r.advisor, amount:Number(r.amount), date:r.paid_date, note:r.note })); }catch(e){ deliveryPayouts = []; }
     await fetchImportData();
@@ -1576,7 +1576,7 @@
           '<td data-label="Cliente">'+escapeHtml(r.client)+(r.phone ? '<br><small>'+escapeHtml(r.phone)+'</small>' : '')+(r.advisor ? '<br><small>Asesor: '+escapeHtml(r.advisor)+'</small>' : '')+'</td>' +
           '<td data-label="Total">'+fmtUSD(total)+'</td><td data-label="Abonado">'+fmtUSD(paid)+'</td>' +
           '<td data-label="Saldo">'+(next ? '<b class="neg">Saldo '+fmtUSD(total-paid)+'</b><br><small>'+fmtUSD(next.amount)+' · vence '+next.due+(next.due < todayLocal() ? ' <b class="neg">(vencida)</b>' : '')+'</small> <button class="link-btn" data-respay="'+next.id+'">Cobrar</button>' : '<span class="pos">&#10003; Pagada completa</span>')+'</td>' +
-          '<td data-label=""><div class="row-actions"><button class="link-btn" data-resdeliver="'+r.id+'"'+(canDeliver ? '' : ' title="Aún no hay stock suficiente"')+'>Entregar</button><button class="link-btn danger" data-rescancel="'+r.id+'">Cancelar</button></div>'+(canDeliver ? '' : '<small>Sin stock aún</small>')+'</td></tr>';
+          '<td data-label=""><div class="row-actions"><button class="link-btn" data-resedit="'+r.id+'">Editar</button><button class="link-btn" data-resdeliver="'+r.id+'"'+(canDeliver ? '' : ' title="Aún no hay stock suficiente"')+'>Entregar</button><button class="link-btn danger" data-rescancel="'+r.id+'">Cancelar</button></div>'+(canDeliver ? '' : '<small>Sin stock aún</small>')+'</td></tr>';
       }).join('') + '</tbody></table></div><p style="font-size:12px;color:var(--ink-soft);margin:8px 0 0;">Al entregar se convierte en una venta (descuenta stock y cuenta como ingreso ese día) y los abonos pasan con ella.</p>';
     box.querySelectorAll('[data-respay]').forEach(b=> b.addEventListener('click', async ()=>{
       if(!confirm('¿Registrar este pago como cobrado hoy?')) return;
@@ -1584,6 +1584,7 @@
       if(error){ console.error(error); showToast(error.message || 'No se pudo registrar el pago.'); return; }
       await refreshAllData(); renderAll(); showToast('Pago registrado.');
     }));
+    box.querySelectorAll('[data-resedit]').forEach(b=> b.addEventListener('click', ()=> openEditRes(b.dataset.resedit)));
     box.querySelectorAll('[data-resdeliver]').forEach(b=> b.addEventListener('click', async ()=>{
       if(!confirm('¿Entregar esta reserva? Se registrará como venta de hoy y se descontará del stock.')) return;
       const { error } = await sb.rpc('deliver_reservation', { p_id: b.dataset.resdeliver, p_date: todayLocal() });
@@ -1597,6 +1598,57 @@
       await refreshAllData(); renderAll(); showToast('Reserva cancelada.');
     }));
   }
+
+  /* ----- editar reserva ----- */
+  let editingResId = null, erRows = [];
+  function erTotal(){ return (Number(document.getElementById('erQty').value)||0) * (Number(document.getElementById('erPrice').value)||0); }
+  function erRefresh(){
+    const sum = erRows.reduce((a,x)=>a+(Number(x.amount)||0),0), tot = erTotal(), ok = Math.abs(sum-tot) <= 0.01;
+    document.getElementById('erSum').innerHTML = 'Pagos suman <b>'+fmtUSD(sum)+'</b> · Total de la reserva <b>'+fmtUSD(tot)+'</b> '+(ok ? '<span class="pos">&#10003;</span>' : '<b class="neg">(deben coincidir)</b>');
+  }
+  function erRender(){
+    document.getElementById('erPays').innerHTML = '<label style="font-size:13px;font-weight:600;">Pagos</label>' + erRows.map((x,i)=>
+      '<div style="display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap;"><span style="min-width:54px;">'+(i===0?'Abono':'Pago '+i)+'</span>'+
+      '<input type="number" step="0.01" min="0" data-eramt="'+i+'" value="'+x.amount+'" style="width:90px;">'+
+      '<input type="date" data-erdue="'+i+'" value="'+x.due+'">'+
+      '<label style="display:flex;gap:4px;align-items:center;font-size:13px;"><input type="checkbox" data-erpaid="'+i+'" style="width:auto;"'+(x.paid?' checked':'')+'> cobrado</label></div>').join('');
+    document.querySelectorAll('[data-eramt]').forEach(e=> e.addEventListener('input', ()=>{ erRows[e.dataset.eramt].amount = e.value; erRefresh(); }));
+    document.querySelectorAll('[data-erdue]').forEach(e=> e.addEventListener('change', ()=>{ erRows[e.dataset.erdue].due = e.value; }));
+    document.querySelectorAll('[data-erpaid]').forEach(e=> e.addEventListener('change', ()=>{ const r = erRows[e.dataset.erpaid]; r.paid = e.checked; if(e.checked && !r.paidAt) r.paidAt = todayLocal(); if(!e.checked) r.paidAt = null; }));
+    erRefresh();
+  }
+  function openEditRes(id){
+    const r = reservations.find(x=>x.id === id); if(!r) return;
+    editingResId = id;
+    erRows = resPayments.filter(x=>x.resId === id).sort((a,b)=>a.number-b.number).map(x=>({ amount: x.amount, due: x.due, paid: !!x.paid, paidAt: x.paidAt || null }));
+    document.getElementById('erProd').textContent = r.productName;
+    document.getElementById('erClient').value = r.client || '';
+    document.getElementById('erPhone').value = r.phone || '';
+    document.getElementById('erAdvisor').value = r.advisor || '';
+    document.getElementById('erDate').value = r.date;
+    document.getElementById('erQty').value = r.qty;
+    document.getElementById('erPrice').value = r.price;
+    erRender();
+    document.getElementById('editResOverlay').classList.add('active');
+  }
+  ['erQty','erPrice'].forEach(i=> document.getElementById(i).addEventListener('input', erRefresh));
+  document.getElementById('erCancel').addEventListener('click', ()=> document.getElementById('editResOverlay').classList.remove('active'));
+  document.getElementById('editResForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const { error } = await sb.rpc('update_reservation', {
+      p_id: editingResId,
+      p_client: document.getElementById('erClient').value,
+      p_phone: document.getElementById('erPhone').value,
+      p_advisor: document.getElementById('erAdvisor').value,
+      p_date: document.getElementById('erDate').value,
+      p_qty: Number(document.getElementById('erQty').value),
+      p_price: Number(document.getElementById('erPrice').value),
+      p_payments: erRows.map(x=>({ amount: Number(x.amount), due: x.due, paid: !!x.paid, paid_at: x.paid ? (x.paidAt || todayLocal()) : null }))
+    });
+    if(error){ console.error(error); showToast(error.message || 'No se pudo guardar la reserva.'); return; }
+    document.getElementById('editResOverlay').classList.remove('active');
+    await refreshAllData(); renderAll(); showToast('Reserva actualizada.');
+  });
 
   /* ===================== DELIVERY POR ASESOR ===================== */
   function renderDelivery(){
