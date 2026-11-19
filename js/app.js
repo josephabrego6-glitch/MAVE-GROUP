@@ -618,6 +618,47 @@
   document.querySelector('nav.sidenav [data-view="seguridad"]').addEventListener('click', secReload);
   setInterval(async ()=>{ if(me && me.role === 'admin'){ await fetchSecurity(); updateSecBadge(true); } }, 60000);
 
+  /* ===================== VISITAS DEL CATÁLOGO ===================== */
+  function visAgo(iso){
+    const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime())/1000));
+    if(s < 60) return 'hace ' + s + ' s';
+    if(s < 3600) return 'hace ' + Math.round(s/60) + ' min';
+    if(s < 86400) return 'hace ' + Math.round(s/3600) + ' h';
+    return 'hace ' + Math.round(s/86400) + ' d';
+  }
+  async function renderVisits(){
+    if(!me || me.role !== 'admin') return;
+    const { data, error } = await sb.rpc('catalog_visits_summary');
+    if(error || !data){ document.getElementById('visNow').textContent = 'No se pudieron cargar las visitas.'; return; }
+    const n = data.online || 0;
+    document.getElementById('visNow').innerHTML = n > 0
+      ? '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#2e9e5b;margin-right:8px;"></span><b>' + n + '</b> ' + (n === 1 ? 'persona está' : 'personas están') + ' viendo el catálogo ahora'
+      : '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#bbb;margin-right:8px;"></span>Nadie en este momento' + (data.last_seen ? ' · última visita ' + visAgo(data.last_seen) : ' · aún no hay visitas');
+    const vb = document.getElementById('visBadge'); if(vb) vb.textContent = n > 0 ? '(' + n + ')' : '';
+    document.getElementById('visToday').textContent = data.today || 0;
+    document.getElementById('visD7').textContent = data.d7 || 0;
+    document.getElementById('visD30').textContent = data.d30 || 0;
+    document.getElementById('visAsks').textContent = data.asks30 || 0;
+    const days = data.days || [], mx = Math.max(1, ...days.map(d => d.visitors));
+    document.getElementById('visDays').innerHTML = days.map(d =>
+      '<div style="display:flex;align-items:center;gap:10px;margin:4px 0;font-size:13px;"><span style="width:44px;color:var(--ink-soft);">' + d.label + '</span>' +
+      '<div style="flex:1;background:#f3ecee;border-radius:6px;height:14px;"><div style="width:' + Math.round(d.visitors/mx*100) + '%;background:var(--wine);height:14px;border-radius:6px;min-width:' + (d.visitors ? 4 : 0) + 'px;"></div></div>' +
+      '<b style="width:28px;text-align:right;">' + d.visitors + '</b></div>').join('');
+    const asked = {}; (data.asked || []).forEach(a => asked[a.name] = a.asks);
+    const top = data.top || [];
+    document.querySelector('#tblVisTop tbody').innerHTML = top.map(t => '<tr><td>' + escapeHtml(t.name) + '</td><td>' + t.opens + '</td><td>' + (asked[t.name] || 0) + '</td></tr>').join('');
+    document.getElementById('emptyVisTop').style.display = top.length ? 'none' : '';
+    const EV = { view:'Entró al catálogo', open:'Abrió una cartera', ask:'Tocó “Pedir por Instagram”' };
+    const rec = data.recent || [];
+    document.querySelector('#tblVisRecent tbody').innerHTML = rec.map(r => '<tr><td>' + visAgo(r.created_at) + '</td><td>' + (EV[r.event] || r.event) + '</td><td>' + escapeHtml(r.product_name || '') + '</td><td>' + escapeHtml(r.device || '') + '</td><td>' + escapeHtml(r.referrer || '') + '</td></tr>').join('');
+    document.getElementById('emptyVisRecent').style.display = rec.length ? 'none' : '';
+    const dev = (data.devices || []).map(d => d.device + ': <b>' + d.visitors + '</b>').join(' · ') || 'Sin datos';
+    const src = (data.sources || []).map(s => escapeHtml(s.source) + ': <b>' + s.visitors + '</b>').join(' · ') || 'Sin datos';
+    document.getElementById('visMeta').innerHTML = '<div>Dispositivos: ' + dev + '</div><div>Desde dónde llegaron: ' + src + '</div>';
+  }
+  document.querySelector('nav.sidenav [data-view="visitas"]').addEventListener('click', renderVisits);
+  setInterval(()=>{ if(me && me.role === 'admin' && !document.hidden) renderVisits(); }, 30000);
+
   // bloqueo de doble envío en los demás formularios (producto, venta, gasto)
   ['productForm','saleForm','expenseForm'].forEach(id=>{
     const f = document.getElementById(id);
@@ -700,7 +741,7 @@
     const allowed = {
       dashboard: me.role === 'admin' || (canView('ventas') && canView('insumos')),
       inventario: canView('inventario'), catalogo: canView('inventario'),
-      ventas: canView('ventas'), cobros: canView('ventas'), insumos: canView('insumos'), importaciones: canView('importaciones'), seguridad: me.role === 'admin'
+      ventas: canView('ventas'), cobros: canView('ventas'), insumos: canView('insumos'), importaciones: canView('importaciones'), seguridad: me.role === 'admin', visitas: me.role === 'admin'
     };
     let first = null;
     document.querySelectorAll('nav.sidenav button').forEach(btn=>{

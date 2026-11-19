@@ -63,6 +63,7 @@
       <button data-view="cobros">Cobros <span id="cobrosBadge"></span></button>
       <button data-view="importaciones">Importaciones</button>
       <button data-view="seguridad">Seguridad <span id="secBadge"></span></button>
+      <button data-view="visitas">Visitas <span id="visBadge"></span></button>
       <button data-view="insumos">Insumos y gastos</button>
     </nav>
 
@@ -453,6 +454,30 @@
           </div><div class="form-actions"><button type="submit" class="btn btn-primary" style="width:auto;">Guardar umbrales</button></div></form></div>
       </section>
 
+      <section class="view" id="view-visitas">
+        <div class="view-header">
+          <h1>Visitas del catálogo</h1>
+          <p>Quién entra a tu catálogo público. Solo visible para el administrador. No se guardan nombres ni datos personales.</p>
+        </div>
+        <div class="panel"><h2>Ahora mismo</h2>
+          <div id="visNow" style="font-size:16px;"></div>
+          <p style="font-size:12.5px;color:var(--ink-soft);margin:10px 0 0;">Se actualiza solo cada 30 segundos. Cuenta a quien tuvo el catálogo abierto en los últimos 3 minutos. Tus propias visitas no cuentan si abriste el catálogo una vez con <b>?yo</b> al final del enlace.</p></div>
+        <div class="cards-row">
+          <div class="stat-card"><div class="label">Visitantes hoy</div><div class="value" id="visToday">–</div></div>
+          <div class="stat-card"><div class="label">Últimos 7 días</div><div class="value" id="visD7">–</div></div>
+          <div class="stat-card"><div class="label">Últimos 30 días</div><div class="value" id="visD30">–</div></div>
+          <div class="stat-card"><div class="label">Tocaron “Pedir por Instagram” (30 días)</div><div class="value" id="visAsks">–</div></div>
+        </div>
+        <div class="panel"><h2>Visitantes por día (últimos 14 días)</h2><div id="visDays"></div></div>
+        <div class="panel"><h2>Carteras más vistas (30 días)</h2>
+          <div style="overflow-x:auto;"><table id="tblVisTop"><thead><tr><th>Cartera</th><th>Veces abierta</th><th>Pidieron por Instagram</th></tr></thead><tbody></tbody></table></div>
+          <p class="empty" id="emptyVisTop">Aún no hay datos.</p></div>
+        <div class="panel"><h2>Actividad reciente</h2>
+          <div style="overflow-x:auto;"><table id="tblVisRecent"><thead><tr><th>Cuándo</th><th>Qué hizo</th><th>Cartera</th><th>Dispositivo</th><th>Origen</th></tr></thead><tbody></tbody></table></div>
+          <p class="empty" id="emptyVisRecent">Aún no hay visitas registradas.</p></div>
+        <div class="panel"><h2>Dispositivos y origen (30 días)</h2><div id="visMeta" style="font-size:14px;line-height:1.8;"></div></div>
+      </section>
+
       <section class="view" id="view-insumos">
         <div class="view-header">
           <h1>Insumos y gastos</h1>
@@ -572,6 +597,6 @@
 <button type="button" class="cat-exit" id="catExit">Salir del modo cliente</button>
 <div class="toast" id="toast"></div>
 
-<script src="js/app.js?v=31"></script>
+<script src="js/app.js?v=32"></script>
 </body>
 </html>
