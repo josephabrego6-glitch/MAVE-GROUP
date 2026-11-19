@@ -101,6 +101,7 @@ section.how li small{display:block;color:var(--soft);font-size:.85rem;line-heigh
 <script>
 /* ===== Configuración ===== */
 var IG_USER = 'mavebags.pa';   // tu usuario de Instagram sin @ (si queda vacío, se oculta el botón de pedir)
+var SHOW_PRICE = false;   // false = el catálogo no muestra precios; pon true para mostrarlos
 var API = 'https://aagsotpxkvjeblmbcbtd.supabase.co/rest/v1/rpc/';
 var KEY = 'sb_publishable_l7d_aPCwLSU8mdBv2jCQnQ_xAYNmWW9';
 
@@ -108,7 +109,7 @@ var ALL = [], filter = 'disponibles', view = [], cur = -1, full = {};
 var LABEL = {disponible:'Disponible', ultimas:'Últimas unidades', agotado:'Agotado'};
 var SOON = {disponible:'Lista para ti 🤍', ultimas:'Quedan muy pocas ✨', agotado:'Se agotó, pero puedes preguntar por ella 🎀'};
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
-function money(n){n=Number(n);return n>0?'$'+(Math.round(n*100)/100).toFixed(n%1?2:0):''}
+function money(n){if(!SHOW_PRICE)return '';n=Number(n);return n>0?'$'+(Math.round(n*100)/100).toFixed(n%1?2:0):''}
 function rpc(fn,body){
   return fetch(API+fn,{method:'POST',headers:{apikey:KEY,Authorization:'Bearer '+KEY,'Content-Type':'application/json'},body:JSON.stringify(body||{})}).then(function(r){if(!r.ok)throw new Error(r.status);return r.json()});
 }
